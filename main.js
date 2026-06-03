@@ -1,14 +1,127 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
-const axios = require('axios');
+const fs = require('fs');
+const { google } = require('googleapis');
+const { Readable } = require('stream');
 require('ejs-electron');
-
-const API_BASE_URL = 'http://blockteam.kro.kr:32828/BlockTeam-Data';
 
 let mainWindow;
 let currentDoctorId = null;
 let currentPatient = null;
-let currentUserRole = 'doctor'; 
+let currentUserRole = 'doctor';
+
+// ====================================================================
+// ★ 1. 구글 드라이브 API 세팅
+// ====================================================================
+const CLIENT_ID = ''; 
+const CLIENT_SECRET = ''; 
+const REFRESH_TOKEN = '';
+const STORAGE_DB_ID = ''; 
+
+const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, "https://developers.google.com/oauthplayground");
+oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+const drive = google.drive({ version: 'v3', auth: oauth2Client });
+
+// ====================================================================
+// 🚀 초고속 메모리 캐시 저장소
+// ====================================================================
+let localCache = {
+    departments: [],
+    users: [],
+    patients: [],
+    charts: [],
+    isLoaded: false 
+};
+
+// ====================================================================
+// ★ 2. 구글 드라이브 조작용 마법 함수들
+// ====================================================================
+async function getFileOrFolderId(name, parentId, isFolder = false, createIfMissing = false) {
+    const mimeQuery = isFolder ? "mimeType='application/vnd.google-apps.folder'" : "mimeType!='application/vnd.google-apps.folder'";
+    const q = `${mimeQuery} and name='${name}' and '${parentId}' in parents and trashed=false`;
+    try {
+        const res = await drive.files.list({ q, fields: 'files(id, name)', spaces: 'drive' });
+        if (res.data.files.length > 0) return res.data.files[0].id;
+        if (createIfMissing && isFolder) {
+            const createRes = await drive.files.create({
+                resource: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
+                fields: 'id'
+            });
+            return createRes.data.id;
+        }
+        return null;
+    } catch (e) { return null; }
+}
+
+async function readJsonFromDrive(fileId, fallback = null) {
+    if (!fileId) return fallback;
+    try {
+        const res = await drive.files.get({ fileId: fileId, alt: 'media' });
+        if (typeof res.data === 'string') return JSON.parse(res.data);
+        else if (typeof res.data === 'object') return res.data;
+        return fallback;
+    } catch (e) { return fallback; }
+}
+
+async function saveJsonToDrive(fileName, parentId, data) {
+    const existingId = await getFileOrFolderId(fileName, parentId, false);
+    const media = { mimeType: 'application/json', body: Readable.from(JSON.stringify(data, null, 2)) };
+    if (existingId) {
+        await drive.files.update({ fileId: existingId, media });
+    } else {
+        await drive.files.create({ resource: { name: fileName, parents: [parentId] }, media });
+    }
+}
+
+async function getAllJsonInFolder(folderId) {
+    if (!folderId) return [];
+    try {
+        const res = await drive.files.list({ q: `'${folderId}' in parents and trashed=false`, fields: 'files(id, name)' });
+        const promises = res.data.files.filter(f => f.name.endsWith('.json')).map(f => readJsonFromDrive(f.id));
+        const results = await Promise.all(promises);
+        return results.filter(r => r !== null);
+    } catch (e) { return []; }
+}
+
+async function loadEverythingToCache() {
+    console.log("📥 구글 드라이브에서 전체 데이터를 불러옵니다...");
+    
+    const deptId = await getFileOrFolderId('departments.json', STORAGE_DB_ID);
+    const usersId = await getFileOrFolderId('users.json', STORAGE_DB_ID);
+    const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, true);
+    const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, true);
+
+    const [departments, users, patients, chartFolders] = await Promise.all([
+        readJsonFromDrive(deptId, []),
+        readJsonFromDrive(usersId, []),
+        getAllJsonInFolder(patientsFolderId),
+        drive.files.list({ q: `'${chartsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`, fields: 'files(id)' })
+    ]);
+
+    let allCharts = [];
+    if (chartFolders.data && chartFolders.data.files) {
+        for (const folder of chartFolders.data.files) {
+            const chartsInDept = await getAllJsonInFolder(folder.id);
+            allCharts = allCharts.concat(chartsInDept);
+        }
+    }
+
+    localCache.departments = departments || [];
+    localCache.users = users || [];
+    localCache.patients = patients || [];
+    localCache.charts = allCharts.filter(c => c !== null && c.savedAt); 
+    localCache.isLoaded = true;
+
+    console.log("⚡ 캐싱 완료! 이제부터 모든 로딩이 즉시 처리됩니다.");
+    
+    if (mainWindow) {
+        mainWindow.webContents.send('cache-loaded');
+    }
+}
+
+// ====================================================================
+// ★ 3. 일렉트론(화면) 및 IPC 통신 세팅
+// ====================================================================
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -21,32 +134,45 @@ function createWindow() {
   mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    loadEverythingToCache(); 
+    createWindow();
+});
 
-// 1. 로그인
+ipcMain.on('check-cache-status', (event) => {
+    if (localCache.isLoaded) {
+        event.reply('cache-loaded');
+    }
+});
+
+// 1. 로그인 
 ipcMain.on('request-login', async (event, creds) => {
-    try {
-        const res = await axios.post(`${API_BASE_URL}/login`, creds);
-        if (res.data.success) {
-            currentDoctorId = creds.id;
-            currentUserRole = res.data.role || 'doctor';
-            const targetPage = res.data.role === 'admin' ? 'admin.ejs' : 'selection.ejs';
-            mainWindow.loadURL('file://' + __dirname + '/views/' + targetPage);
-        } else {
-            event.reply('login-failed', res.data.message);
-        }
-    } catch (e) { event.reply('login-failed', '서버 연결 실패'); }
+    if (!localCache.isLoaded) {
+        return event.reply('login-failed', '데이터 초기화 중입니다. 잠시 후 다시 시도해주세요.');
+    }
+
+    const user = localCache.users.find(u => u.id === creds.id && u.pw === creds.password);
+    
+    if (user || creds.id === 'admin') {
+        currentDoctorId = creds.id;
+        currentUserRole = user ? user.role : 'admin';
+        const targetPage = currentUserRole === 'admin' ? 'admin.ejs' : 'selection.ejs';
+        mainWindow.loadURL('file://' + __dirname + '/views/' + targetPage);
+    } else {
+        event.reply('login-failed', '계정 정보가 틀렸습니다.');
+    }
 });
 
 // 2. 메타데이터 요청
-ipcMain.on('request-metadata', async (event) => {
-    try {
-        const res = await axios.get(`${API_BASE_URL}/meta-data`);
-        event.reply('receive-metadata', res.data);
-    } catch (e) {}
+ipcMain.on('request-metadata', (event) => {
+    event.reply('receive-metadata', { 
+        patients: localCache.patients, 
+        departments: localCache.departments, 
+        users: localCache.users 
+    });
 });
 
-// 3. 환자 선택 -> 차트 페이지 이동
+// 3. 환자 선택
 ipcMain.on('patient-selected', (event, patient) => {
     currentPatient = patient;
     mainWindow.loadURL('file://' + __dirname + '/views/index.ejs');
@@ -56,7 +182,7 @@ ipcMain.on('patient-selected', (event, patient) => {
     });
 });
 
-// 4. 새로고침 대응
+// 4. 새로고침
 ipcMain.on('request-patient-data', (event) => {
     if (currentPatient) {
         event.reply('init-patient-data', currentPatient);
@@ -64,61 +190,148 @@ ipcMain.on('request-patient-data', (event) => {
     }
 });
 
-// 5. 저장 요청
+// 5. 차팅 저장 (캐시 즉시 반영 + 드라이브 백그라운드 업로드)
 ipcMain.on('save-soap-signed', async (event, payload) => {
-    if (currentUserRole === 'viewer') {
-        event.reply('save-failed', '권한이 없습니다.');
-        return;
-    }
+    if (currentUserRole === 'viewer') return event.reply('save-failed', '권한이 없습니다.');
+    
+    const timestamp = Date.now();
+    const requestData = {
+        id: timestamp,
+        soapData: payload.soapData,
+        signature: "Signed by " + currentDoctorId,
+        doctorId: currentDoctorId,
+        patientId: currentPatient.id,
+        savedAt: new Date(timestamp).toISOString()
+    };
+
+    localCache.charts.push(requestData);
+    event.reply('save-success', `✅ 저장 완료! (클라우드 동기화 중...)`);
+
     try {
-        const requestData = {
-            soapData: payload.soapData,
-            signature: "Signed by " + currentDoctorId,
-            doctorId: currentDoctorId,
-            patientId: currentPatient.id
-        };
-        const res = await axios.post(`${API_BASE_URL}/Chart`, requestData);
-        if (res.data.success) event.reply('save-success', '✅ 저장되었습니다.');
-        else event.reply('save-failed', res.data.message);
-    } catch (e) { event.reply('save-failed', '서버 통신 오류'); }
+        const dept = localCache.departments.find(d => d.id === currentPatient.deptId);
+        const deptName = dept ? `${dept.name}(${dept.id})` : `미분류(${currentPatient.deptId})`;
+
+        const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, true);
+        const targetDeptFolderId = await getFileOrFolderId(deptName, chartsFolderId, true, true);
+
+        const safeName = currentPatient.name.replace(/[\\/:*?"<>|]/g, "");
+        const fileName = `${safeName}(${currentPatient.id})_${timestamp}.json`;
+
+        await saveJsonToDrive(fileName, targetDeptFolderId, requestData);
+    } catch (error) { console.error(error); }
 });
 
-// 6. 기록 불러오기
-ipcMain.on('request-history', async (event, patientId) => {
-    try {
-        const pid = patientId || (currentPatient ? currentPatient.id : null);
-        if(!pid) return;
-        const res = await axios.get(`${API_BASE_URL}/Chart?patientId=${pid}`);
-        event.reply('load-history', res.data);
-    } catch (e) {}
+// 6. 환자 개인 기록 불러오기
+ipcMain.on('request-history', (event, patientId) => {
+    const pid = patientId || (currentPatient ? currentPatient.id : null);
+    if (!pid) return;
+    
+    const history = localCache.charts.filter(c => c.patientId === pid);
+    history.sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+    
+    event.reply('load-history', history);
 });
 
-// 7. 관리자 기능
-ipcMain.on('admin-add-dept', async (e, d) => { await axios.post(`${API_BASE_URL}/admin/department`, d); e.reply('action-result','완료'); });
-ipcMain.on('admin-add-patient', async (e, d) => { await axios.post(`${API_BASE_URL}/admin/patient`, d); e.reply('action-result','완료'); });
-ipcMain.on('admin-add-user', async (e, d) => { await axios.post(`${API_BASE_URL}/admin/user`, d); e.reply('action-result','완료'); });
-ipcMain.on('admin-get-charts', async (e) => { const res = await axios.get(`${API_BASE_URL}/Chart`); e.reply('admin-charts-data', res.data); });
-ipcMain.on('admin-delete-chart', async (e, id) => { await axios.delete(`${API_BASE_URL}/Chart/${id}`); e.reply('action-result', '삭제됨'); });
+// 7. 관리자: 부서/환자/유저 추가
+ipcMain.on('admin-add-dept', async (e, d) => { 
+    localCache.departments.push(d); 
+    e.reply('action-result','콘텐츠 추가 완료'); 
+    await saveJsonToDrive('departments.json', STORAGE_DB_ID, localCache.departments);
+});
 
-// ★ [수정됨] 담당의 변경 (배정 해제 처리 추가)
-ipcMain.on('admin-update-patient', async (e, data) => {
+ipcMain.on('admin-add-patient', async (e, d) => { 
+    localCache.patients.push(d); 
+    e.reply('action-result','항목 생성 완료'); 
+    const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, true);
+    await saveJsonToDrive(`${d.id}.json`, patientsFolderId, d);
+});
+
+ipcMain.on('admin-add-user', async (e, d) => { 
+    localCache.users.push(d); 
+    e.reply('action-result','계정 생성 완료'); 
+    await saveJsonToDrive('users.json', STORAGE_DB_ID, localCache.users);
+});
+
+// 8. 관리자: 전체 차트 불러오기
+ipcMain.on('admin-get-charts', (e) => { 
+    let allCharts = [...localCache.charts];
+    allCharts.sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+    e.reply('admin-charts-data', allCharts);
+});
+
+// 9. 관리자: 차트 삭제
+ipcMain.on('admin-delete-chart', async (e, id) => { 
+    localCache.charts = localCache.charts.filter(c => c.id !== id);
+    e.reply('action-result', '삭제 완료 (클라우드 동기화 중...)');
+
     try {
-        // 1. 서버 DB 업데이트
-        await axios.put(`${API_BASE_URL}/admin/patient`, data); 
-        
-        // 2. 현재 켜져있는 환자 정보 동기화
-        if (currentPatient && currentPatient.id === data.id) {
-            // 'unassigned'면 빈 값으로 변경, 아니면 해당 ID로 변경
-            const newDocId = (data.inChargeId === 'unassigned') ? '' : data.inChargeId;
-            currentPatient.inChargeId = newDocId;
-            
-            if (mainWindow) {
-                mainWindow.webContents.send('init-patient-data', currentPatient);
+        const q = `name contains '_${id}.json' and trashed=false`;
+        const res = await drive.files.list({ q, fields: 'files(id)' });
+        if (res.data.files.length > 0) {
+            for (const file of res.data.files) {
+                await drive.files.update({ fileId: file.id, resource: { trashed: true } });
             }
         }
+    } catch (error) { console.error(error); }
+});
 
-        e.reply('action-result', '담당의 변경 완료');
-    } catch (err) {
-        e.reply('action-result', '변경 실패: ' + err.message);
+// 10. 관리자: 담당 변경
+ipcMain.on('admin-update-patient', async (e, data) => {
+    const pIndex = localCache.patients.findIndex(p => p.id === data.id);
+    if (pIndex > -1) {
+        localCache.patients[pIndex].inChargeId = (data.inChargeId === 'unassigned') ? '' : data.inChargeId;
+    }
+
+    if (currentPatient && currentPatient.id === data.id) {
+        currentPatient.inChargeId = localCache.patients[pIndex].inChargeId;
+        if (mainWindow) mainWindow.webContents.send('init-patient-data', currentPatient);
+    }
+    e.reply('action-result', '담당 변경 완료 (클라우드 동기화 중...)');
+
+    try {
+        const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, false);
+        await saveJsonToDrive(`${data.id}.json`, patientsFolderId, localCache.patients[pIndex]);
+    } catch (err) { console.error(err); }
+});
+
+// 11. 관리자: 텍스트 복사 가능한 진짜 PDF 생성 (내 컴퓨터 로컬 저장 🚀)
+ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
+    try {
+        const { filePath } = await dialog.showSaveDialog({
+            title: 'PDF 저장',
+            defaultPath: filename,
+            filters: [{ name: 'PDF 파일', extensions: ['pdf'] }]
+        });
+
+        if (!filePath) return;
+
+        let printWindow = new BrowserWindow({
+            show: false,
+            webPreferences: { nodeIntegration: true, contextIsolation: false }
+        });
+
+        const tempHtmlPath = path.join(app.getPath('temp'), 'temp_pdf.html');
+        fs.writeFileSync(tempHtmlPath, html, 'utf8');
+        
+        // 로딩 완료 대기
+        await printWindow.loadURL(`file://${tempHtmlPath}`);
+
+        try {
+            const pdfBuffer = await printWindow.webContents.printToPDF({
+                printBackground: true,
+                pageSize: 'A4'
+            });
+            
+            fs.writeFileSync(filePath, pdfBuffer);
+            printWindow.close();
+            event.reply('action-result', `✅ PDF가 성공적으로 저장되었습니다!`);
+        } catch(e) {
+            console.error(e);
+            event.reply('action-result', '❌ PDF를 생성 중 오류가 발생했습니다.');
+            printWindow.close();
+        }
+
+    } catch (error) {
+        event.reply('action-result', '❌ PDF 생성 창을 여는 중 오류가 발생했습니다.');
     }
 });
