@@ -23,7 +23,7 @@ oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
 const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
 // ====================================================================
-// 🚀 초고속 메모리 캐시 저장소
+// ★ 메모리 캐시 저장소
 // ====================================================================
 let localCache = {
     departments: [],
@@ -84,7 +84,7 @@ async function getAllJsonInFolder(folderId) {
 }
 
 async function loadEverythingToCache() {
-    console.log("📥 구글 드라이브에서 전체 데이터를 불러옵니다...");
+    console.log("📥 드라이브에서 전체 데이터를 불러옵니다...");
     
     const deptId = await getFileOrFolderId('departments.json', STORAGE_DB_ID);
     const usersId = await getFileOrFolderId('users.json', STORAGE_DB_ID);
@@ -132,6 +132,34 @@ function createWindow() {
     icon: path.join(__dirname, 'assets', 'icon.png') 
   });
   mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
+
+  mainWindow.webContents.on('before-input-event', async (event, input) => {
+      if (input.key === 'F5' && input.type === 'keyDown') {
+          event.preventDefault(); // 기본 새로고침(하얀 화면) 방지
+
+          console.log("🔄 F5 새로고침 요청: 드라이브 강제 동기화 시작!");
+
+          // 1. 화면에 즉시 로딩 오버레이 띄우기 (Javascript 주입)
+          mainWindow.webContents.executeJavaScript(`
+              if (!document.getElementById('f5-sync-overlay')) {
+                  const div = document.createElement('div');
+                  div.id = 'f5-sync-overlay';
+                  div.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(47,49,54,0.85); z-index:999999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white; font-family: sans-serif; backdrop-filter: blur(5px);';
+                  div.innerHTML = '<div style="margin-bottom:20px; font-size:4em; animation: spin 1s linear infinite;">🔄</div><div style="font-size:1.5em; font-weight:bold;">드라이브 동기화 중...</div><div style="font-size:0.9em; color:#b9bbbe; margin-top:15px;">새로 추가된 데이터를 긁어오고 있습니다. 잠시만 기다려주세요!</div><style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>';
+                  document.body.appendChild(div);
+              }
+
+              true;
+          `);
+          
+          // 2. 캐시 데이터 다시 긁어오기 (구글 드라이브 통신)
+          await loadEverythingToCache();
+          
+          // 3. 완료되면 화면 새로고침 (오버레이도 자연스럽게 사라지고 최신 데이터 반영)
+          console.log("✅ 동기화 완료: 화면을 새로고침합니다.");
+          mainWindow.reload();
+      }
+  });
 }
 
 app.whenReady().then(() => {
@@ -172,7 +200,7 @@ ipcMain.on('request-metadata', (event) => {
     });
 });
 
-// 3. 환자 선택
+// 3. 선택
 ipcMain.on('patient-selected', (event, patient) => {
     currentPatient = patient;
     mainWindow.loadURL('file://' + __dirname + '/views/index.ejs');
@@ -221,7 +249,7 @@ ipcMain.on('save-soap-signed', async (event, payload) => {
     } catch (error) { console.error(error); }
 });
 
-// 6. 환자 개인 기록 불러오기
+// 6. 개인 기록 불러오기
 ipcMain.on('request-history', (event, patientId) => {
     const pid = patientId || (currentPatient ? currentPatient.id : null);
     if (!pid) return;
@@ -232,7 +260,7 @@ ipcMain.on('request-history', (event, patientId) => {
     event.reply('load-history', history);
 });
 
-// 7. 관리자: 부서/환자/유저 추가
+// 7. 관리자: 콘텐츠/항목/유저 추가
 ipcMain.on('admin-add-dept', async (e, d) => { 
     localCache.departments.push(d); 
     e.reply('action-result','콘텐츠 추가 완료'); 
@@ -294,7 +322,7 @@ ipcMain.on('admin-update-patient', async (e, data) => {
     } catch (err) { console.error(err); }
 });
 
-// 11. 관리자: 텍스트 복사 가능한 진짜 PDF 생성 (내 컴퓨터 로컬 저장 🚀)
+// 11. 관리자: PDF 생성 
 ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
     try {
         const { filePath } = await dialog.showSaveDialog({
@@ -313,7 +341,6 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
         const tempHtmlPath = path.join(app.getPath('temp'), 'temp_pdf.html');
         fs.writeFileSync(tempHtmlPath, html, 'utf8');
         
-        // 로딩 완료 대기
         await printWindow.loadURL(`file://${tempHtmlPath}`);
 
         try {
@@ -327,7 +354,7 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
             event.reply('action-result', `✅ PDF가 성공적으로 저장되었습니다!`);
         } catch(e) {
             console.error(e);
-            event.reply('action-result', '❌ PDF를 생성 중 오류가 발생했습니다.');
+            event.reply('action-result', '❌ PDF를 굽는 중 오류가 발생했습니다.');
             printWindow.close();
         }
 
