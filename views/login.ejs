@@ -5,20 +5,61 @@
     <title>BlockTeam-Note-Data 로그인</title>
     <link rel="stylesheet" href="../assets/style.css">
     <style>
-        /* ★ [추가됨] 저작권 문구 위치 및 스타일 */
         .copyright {
-            position: fixed; /* 화면에 고정 */
-            bottom: 20px;    /* 바닥에서 20px */
-            left: 25px;     /* 오른쪽에서 25px */
-            color: #72767d;  /* 옅은 회색 */
-            font-size: 0.8em;
-            font-family: sans-serif;
-            opacity: 0.7;
-            pointer-events: none; /* 클릭 방지 */
+            position: fixed; bottom: 20px; left: 25px; 
+            color: #72767d; font-size: 0.8em; font-family: sans-serif; 
+            opacity: 0.7; pointer-events: none;
         }
+        
+        .loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: #2f3136; z-index: 9999;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            transition: opacity 0.5s ease; 
+        }
+        
+
+        .logo-loader-container {
+            position: relative;
+            width: 150px;
+            height: 150px;
+            margin-bottom: 25px;
+        }
+        
+        .logo-bg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain;
+            opacity: 0.2; 
+            filter: grayscale(100%); 
+        }
+        
+        .logo-fill {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            object-fit: contain;
+            animation: fill-up 2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite; 
+        }
+        
+       
+        @keyframes fill-up {
+            0% { clip-path: inset(100% 0 0 0); } 
+            50% { clip-path: inset(0 0 0 0); }   
+            100% { clip-path: inset(100% 0 0 0); } 
+        }
+        
+        .loading-text { color: #fff; font-size: 1.3em; font-weight: bold; font-family: 'Segoe UI', sans-serif;}
+        .loading-subtext { color: #b9bbbe; margin-top: 10px; font-size: 0.9em; font-family: 'Segoe UI', sans-serif;}
     </style>
 </head>
 <body>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="logo-loader-container">
+            <img src="../assets/logoX.png" class="logo-bg">
+            <img src="../assets/logoX.png" class="logo-fill">
+        </div>
+        <div class="loading-text">드라이브 클라우드 동기화 중...</div>
+        <div class="loading-subtext">데이터를 안전하게 불러오고 있습니다. 잠시만 기다려주세요.</div>
+    </div>
+
     <div class="login-wrapper">
         <div class="login-box">
             <h2 style="color: #eeeeee;">BlockTeam Note Data</h2>
@@ -36,6 +77,16 @@
     <script>
         const { ipcRenderer } = require('electron');
 
+        ipcRenderer.send('check-cache-status');
+
+        ipcRenderer.on('cache-loaded', () => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.style.opacity = '0'; 
+                setTimeout(() => { overlay.style.display = 'none'; }, 500); 
+            }
+        });
+
         function tryLogin() {
             const id = document.getElementById('uid').value;
             const password = document.getElementById('upw').value;
@@ -45,8 +96,7 @@
         ipcRenderer.on('login-failed', (e, msg) => {
             document.getElementById('msg').innerText = msg;
         });
-        
-        // 엔터키 로그인 지원
+
         document.getElementById('upw').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') tryLogin();
         });
