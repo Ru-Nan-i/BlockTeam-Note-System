@@ -388,6 +388,11 @@
         });
 
         ipcRenderer.on('save-failed', (e, msg) => console.error(msg));
+        // 🔄 백그라운드 실시간 동기화 수신 (차트 작성 화면용)
+        ipcRenderer.on('auto-sync-updated', () => {
+            console.log("⚡ [실시간 감지] 현재 환자의 차트 기록을 자동으로 새로고침합니다.");
+            requestRefresh(); // 현재 환자의 차팅 기록 새로고침
+        });
     </script>
 </body>
 </html>

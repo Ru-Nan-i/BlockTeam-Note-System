@@ -526,6 +526,10 @@
                 ul.appendChild(li);
             });
         }
+        ipcRenderer.on('auto-sync-updated', () => {
+        console.log("⚡ [실시간 감지] 새 차트가 들어와 목록을 자동으로 갱신합니다.");
+        refreshAllData(); // 전체 메타데이터 및 차트 목록 새로고침
+        });
     </script>
 </body>
 </html>
