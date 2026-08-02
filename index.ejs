@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>차트 작성</title>
+    <link rel="stylesheet" href="../assets/style.css">
+    <style>
+        /* 기본 설정 */
+        body { 
+            display: block !important; margin: 0; padding: 0; 
+            overflow: hidden; background-color: #36393f; 
+        }
+
+        /* 1. 레이아웃 */
+        .container { 
+            display: grid; grid-template-columns: 2fr 1fr; 
+            gap: 25px; padding: 25px; height: 94vh; box-sizing: border-box; 
+            max-width: 1600px; margin: 0 auto;
+        }
+        
+        .chart-section, .history-section { 
+            background: var(--panel-color); padding: 25px; 
+            border-radius: 12px; display: flex; flex-direction: column; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            height: 100%; overflow: hidden; position: relative;
+        }
+
+        /* ★ [핵심] 차트 섹션 전체 드래그 방지 */
+        .chart-section { -webkit-app-region: no-drag !important; }
+
+        /* 2. 입력창 영역 */
+        .input-scroll-area {
+            flex: 1; overflow-y: auto; padding: 5px 10px 5px 5px; 
+            margin-bottom: 15px; min-height: 0; position: relative; z-index: 10; 
+        }
+
+        /* 3. 입력창 스타일 (강력한 입력 허용 설정) */
+        textarea { 
+            width: 100%; box-sizing: border-box; height: 300px; margin-bottom: 15px; 
+            background: #40444b; border: 1px solid #2f3136; color: white; 
+            padding: 12px; border-radius: 6px; resize: none; font-size: 1em; line-height: 1.4;
+            font-family: 'Segoe UI', sans-serif;
+            position: relative; z-index: 20; /* 다른 요소보다 위에 배치 */
+            
+            /* 입력 방해 요소 차단 */
+            -webkit-app-region: no-drag !important;
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            pointer-events: auto !important;
+            cursor: text !important;
+        }
+        textarea:focus { outline: 2px solid #5865f2; outline-offset: -2px; background: #40444b; }
+        
+        label { color: #b9bbbe; font-weight: bold; margin-bottom: 5px; display: block; }
+        
+        /* 4. 모달 스타일 */
+        .modal-overlay { 
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.7); z-index: 999;
+            justify-content: center; align-items: center;
+        }
+        .view-box { 
+            background: #2f3136; padding: 30px; border-radius: 12px; 
+            border: 1px solid #3ba55c; width: 600px; max-height: 80vh; 
+            display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+        }
+        .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+        
+        .soap-row { margin-bottom: 15px; }
+        .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        
+        .soap-text { 
+            background: #202225; padding: 10px; border-radius: 6px; 
+            color: #dcddde; white-space: pre-wrap; line-height: 1.5; 
+            border: 1px solid #2f3136; font-size: 1em;
+            -webkit-user-select: text !important;
+        }
+
+        /* 5. 환자 정보 헤더 */
+        .patient-info { 
+            background: #202225; padding: 20px; border-radius: 8px; margin-bottom: 20px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            border: 1px solid #2f3136; flex-shrink: 0; 
+        }
+        .p-tag { background: #5865f2; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; margin-right: 10px; font-weight: bold; }
+        
+        /* 하단 버튼 그룹 */
+        .btn-group { display: flex; gap: 10px; margin-top: auto; flex-shrink: 0; }
+        
+        .btn-back { flex: 0.8; background: #2f3136; color: #b9bbbe; border: 1px solid #40444b; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
+        .btn-back:hover { background: #ed4245; color: white; border-color: #ed4245; }
+
+        .btn-reset { flex: 1; background: #4f545c; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
+        .btn-reset:hover { filter: brightness(1.1); transform: translateY(-2px); }
+
+        #btn-save-action { flex: 2; background: #5865f2; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
+        #btn-save-action:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        
+        /* 리스트 스타일 */
+        ul { list-style: none; padding: 0; overflow-y: auto; flex: 1; padding-right: 5px; }
+        li.history-item { background: #2f3136; margin-bottom: 15px; padding: 20px; border-radius: 8px; border: 1px solid #202225; cursor: pointer; transition: 0.2s; }
+        li.history-item:hover { border-color: #5865f2; transform: translateX(5px); }
+        .history-date { color: #99aab5; font-size: 0.85em; }
+        .history-writer { color: #ffd700; font-size: 0.9em; font-weight: bold; } 
+        .writer-major { color: #ffd700; font-size: 0.85em; font-weight: normal; margin-left: 3px; }
+        .history-summary { color: white; font-weight: bold; font-size: 1.05em; margin-top: 8px; }
+        
+        #viewer-msg {
+            display: none; flex: 1; justify-content: center; align-items: center; 
+            color: #72767d; font-size: 1.5em; border: 3px dashed #40444b; 
+            border-radius: 12px; margin-bottom: 20px; text-align: center; background: #2f3136;
+        }
+
+        ::-webkit-scrollbar { width: 8px; background: #2f3136; }
+        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div id="view-modal" class="modal-overlay">
+        <div class="view-box">
+            <div class="view-header">
+                <div>
+                    <h2 style="color:white; margin:0;">📄 차팅 상세</h2>
+                    <div style="color:#b9bbbe; margin-top:5px; font-size:0.9em;">
+                        작성일: <span id="v-date" style="color:white;">-</span> | 작성자: <span id="v-writer" style="color:#ffd700;">-</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="view-content">
+                <div class="soap-row"><span class="soap-label">Description (설명)</span><div id="v-s" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Objective (객관적 사실 및 목표)</span><div id="v-o" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
+            </div>
+            
+            <div style="margin-top:20px; display:flex; justify-content: flex-end; gap: 10px;">
+                <button onclick="loadFromHistory()" style="padding:10px 20px; background:#3ba55c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">📥 불러오기</button>
+                <button onclick="closeView()" style="padding:10px 20px; background:#4f545c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chart-section">
+            <div class="patient-info">
+                <div style="display:flex; align-items:center;">
+                    <span class="p-tag">항목</span> 
+                    <span id="p-name" style="font-size: 1.3em; font-weight: bold;">-</span>
+                    <span style="color:#72767d; margin: 0 15px;">|</span>
+                    <span id="p-id" style="color:#b9bbbe; font-size: 1.1em;">-</span>
+                </div>
+                <div style="text-align: right;">
+                    <div id="p-incharge" style="color:#ffd700; font-size: 1.05em; font-weight: bold;">담당: -</div>
+                    <div id="p-dept" style="color:#5865f2; font-weight: bold; margin-top:5px;">-</div>
+                </div>
+            </div>
+
+            <div class="input-scroll-area" id="input-area">
+                <label>Description (설명)</label> 
+                <textarea id="s" placeholder="증상, 문제점, 해야할 일 등 항목에 대한 설명"></textarea>
+                
+                <label>Objective (객관적 사실 및 목표)</label> 
+                <textarea id="o" placeholder="관찰 소견, 객관적 정보, 리스트업"></textarea>
+                
+                <label>Assessment (진단 및 평가)</label> 
+                <textarea id="a" placeholder="문제점 진단, 평가, 진행도"></textarea>
+                
+                <label>Plan (계획)</label> 
+                <textarea id="p" placeholder="앞으로의 계획"></textarea>
+            </div>
+
+            <div id="viewer-msg">
+                <div>🔒 <b>기록 열람 전용</b><br><span style="font-size:0.6em; font-weight:normal;">입력 및 수정 권한이 없습니다.</span></div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-back" onclick="goBack()">⬅ 뒤로</button>
+                <button id="btn-reset" class="btn-reset" onclick="hardResetInputs()">새 글 (Reset)</button>
+                <button id="btn-save-action" onclick="saveData()">💾 저장하기 (Save)</button>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <div style="display:flex; align-items:center; gap: 15px; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px; flex-shrink:0;">
+                <h3 style="margin:0; color:white; border:none; padding:0; font-size:1.3em;">📋 차팅 기록 (History)</h3>
+                <button onclick="requestRefresh()" style="width: auto; background:#4f545c; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em;">🔄 새로고침</button>
+            </div>
+            <ul id="history-list">
+                <li style="color:#72767d; text-align:center; padding:40px; border: 2px dashed #40444b; border-radius: 8px;">데이터 불러오는 중...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        let currentViewData = null; 
+        let doctorList = [];
+        let currentPatientInfo = null;
+        let myRole = 'doctor'; 
+
+        window.onload = () => {
+            ipcRenderer.send('request-patient-data');
+            ipcRenderer.send('request-metadata');
+        };
+
+        function goBack() { window.location.href = 'selection.ejs'; }
+
+        ipcRenderer.on('init-user-role', (e, role) => {
+            myRole = role;
+            if (role === 'viewer') {
+                document.getElementById('input-area').style.display = 'none';
+                document.getElementById('viewer-msg').style.display = 'flex';
+                document.getElementById('btn-save-action').style.display = 'none';
+                document.getElementById('btn-reset').style.display = 'none';
+            } else {
+                document.getElementById('input-area').style.display = 'block';
+                document.getElementById('viewer-msg').style.display = 'none';
+                document.getElementById('btn-save-action').style.display = 'block';
+                document.getElementById('btn-reset').style.display = 'block';
+            }
+        });
+
+        ipcRenderer.on('receive-metadata', (e, data) => {
+            if(data.users) { doctorList = data.users; renderHeader(); }
+        });
+
+        ipcRenderer.on('init-patient-data', (e, patient) => {
+            if(!patient) return;
+            currentPatientInfo = patient;
+            renderHeader();
+            ipcRenderer.send('request-history', patient.id);
+            hardResetInputs();
+        });
+
+        function renderHeader() {
+            if(!currentPatientInfo) return;
+            document.getElementById('p-name').innerText = currentPatientInfo.name;
+            document.getElementById('p-id').innerText = currentPatientInfo.id;
+            document.getElementById('p-dept').innerText = currentPatientInfo.deptId || 'General';
+
+            let inChargeText = '배정 안됨';
+            const docId = currentPatientInfo.inChargeId;
+            if (docId) {
+                inChargeText = docId;
+                if (doctorList.length > 0) {
+                    const doc = doctorList.find(u => u.id === docId);
+                    if (doc) {
+                        const major = doc.major ? `(${doc.major})` : '';
+                        inChargeText = `${doc.name} ${major}`;
+                    }
+                }
+            }
+            document.getElementById('p-incharge').innerText = `담당: ${inChargeText}`;
+        }
+
+        ipcRenderer.on('load-history', (e, historyData) => {
+            const list = document.getElementById('history-list');
+            list.innerHTML = '';
+            if (!historyData || historyData.length === 0) {
+                list.innerHTML = '<li style="color:#72767d; text-align:center; padding:40px; border: 2px dashed #40444b; border-radius: 8px;">기록이 없습니다.</li>';
+                return;
+            }
+            historyData.reverse().forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                const dateStr = new Date(item.savedAt).toLocaleString();
+                const sData = item.soapData || {}; 
+                const showA = sData.a || sData.A || '';
+                const showS = sData.s || sData.S || '';
+                const writerName = item.doctorName || item.doctorId; 
+                const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
+
+                li.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <span class="history-date">${dateStr}</span>
+                        <span class="history-writer">
+                            ${writerName}<span class="writer-major">${writerMajor}</span>
+                        </span>
+                    </div>
+                    <div class="history-summary">${showA ? '[Dx] ' + showA : '[Sx] ' + (showS || '내용 없음')}</div>
+                `;
+                li.onclick = () => openView(item);
+                list.appendChild(li);
+            });
+        });
+
+        function openView(item) {
+            currentViewData = item;
+            const data = item.soapData;
+            const writerName = item.doctorName || item.doctorId;
+            const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
+
+            document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
+            document.getElementById('v-writer').innerText = `${writerName} ${writerMajor}`;
+            document.getElementById('v-s').innerText = data.s || data.S || '-';
+            document.getElementById('v-o').innerText = data.o || data.O || '-';
+            document.getElementById('v-a').innerText = data.a || data.A || '-';
+            document.getElementById('v-p').innerText = data.p || data.P || '-';
+            document.getElementById('view-modal').style.display = 'flex';
+        }
+
+        function closeView() {
+            document.getElementById('view-modal').style.display = 'none';
+        }
+
+        // ★ [핵심] 불러오기: confirm 제거 -> 입력 먹통 방지
+        function loadFromHistory() {
+            if (myRole === 'viewer') return;
+            if (!currentViewData) return;
+
+            const data = currentViewData.soapData;
+            document.getElementById('s').value = data.s || data.S || '';
+            document.getElementById('o').value = data.o || data.O || '';
+            document.getElementById('a').value = data.a || data.A || '';
+            document.getElementById('p').value = data.p || data.P || '';
+            
+            // 불러왔음을 표시 (버튼 색상 변경)
+            const btn = document.getElementById('btn-save-action');
+            if(btn) {
+                btn.innerText = "✨ 새 기록으로 저장 (New Save)";
+                btn.style.backgroundColor = "#eb459e";
+            }
+            
+            closeView();
+            
+            // ★ 강제 포커스로 입력 활성화 보장
+            setTimeout(() => { document.getElementById('s').focus(); }, 50);
+        }
+
+        function hardResetInputs() {
+            ['s','o','a','p'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.value = '';
+            });
+            
+            const btn = document.getElementById('btn-save-action');
+            if(btn) {
+                btn.innerText = "💾 저장하기 (Save)";
+                btn.style.backgroundColor = "#5865f2";
+            }
+        }
+
+        function saveData() {
+            if (myRole === 'viewer') return; 
+            const s = document.getElementById('s').value;
+            const o = document.getElementById('o').value;
+            const a = document.getElementById('a').value;
+            const p = document.getElementById('p').value;
+            if(!s && !o && !a && !p) {
+                // 간단한 토스트 메시지나 콘솔 로그로 대체 (alert 금지)
+                console.log('내용을 입력해주세요.'); 
+                return;
+            }
+            
+            ipcRenderer.send('save-soap-signed', { 
+                id: null, 
+                patientId: currentPatientInfo.id,
+                soapData: {s,o,a,p} 
+            });
+        }
+        
+        function requestRefresh() {
+            const pid = document.getElementById('p-id').innerText;
+            if(pid && pid !== '-') ipcRenderer.send('request-history', pid);
+        }
+
+        // ★ [핵심] 저장 성공 시 Alert 금지 -> 버튼 UI로 피드백
+        ipcRenderer.on('save-success', (e, msg) => {
+            requestRefresh();
+            hardResetInputs(); 
+            
+            const btn = document.getElementById('btn-save-action');
+            if(btn) {
+                const originalText = btn.innerText;
+                const originalColor = btn.style.backgroundColor;
+                
+                btn.innerText = "✅ 저장 완료!";
+                btn.style.backgroundColor = "#3ba55c"; // 초록색
+                
+                setTimeout(() => {
+                    btn.innerText = "💾 저장하기 (Save)";
+                    btn.style.backgroundColor = "#5865f2"; // 파란색 복귀
+                }, 1500);
+            }
+        });
+
+        ipcRenderer.on('save-failed', (e, msg) => console.error(msg));
+        // 🔄 백그라운드 실시간 동기화 수신 (차트 작성 화면용)
+        ipcRenderer.on('auto-sync-updated', () => {
+            console.log("⚡ [실시간 감지] 현재 환자의 차트 기록을 자동으로 새로고침합니다.");
+            requestRefresh(); // 현재 환자의 차팅 기록 새로고침
+        });
+    </script>
+</body>
+</html>

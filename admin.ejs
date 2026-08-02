@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="../assets/style.css">
+    <style>
+        body { 
+            display: block !important; margin: 0; padding: 0; 
+            overflow: hidden; background-color: #36393f; 
+        }
+        .header {
+            width: 100%; height: 70px; background: #202225; 
+            border-bottom: 1px solid #18191c; 
+            display: flex; justify-content: center; align-items: center; 
+            box-sizing: border-box; flex-shrink: 0;
+        }
+        .admin-grid { 
+            display: grid; grid-template-columns: 1fr 1fr; 
+            gap: 25px; padding: 25px; 
+            height: calc(100vh - 80px); 
+            box-sizing: border-box; 
+            width: 100%; max-width: 1600px; margin: 0 auto;
+        }
+        .left-col { display: flex; flex-direction: column; height: 100%; gap: 15px; overflow-y: auto; padding-right: 5px; }
+        
+        .form-section { 
+            background: var(--panel-color); padding: 20px; border-radius: 12px; 
+            border-left: 5px solid #5865f2; flex: 0 0 auto; 
+            display: flex; flex-direction: column; gap: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .form-section:nth-child(1) { border-left-color: #5865f2; }
+        .form-section:nth-child(2) { border-left-color: #3ba55c; }
+        .form-section:nth-child(3) { border-left-color: #eb459e; }
+        .form-section:nth-child(4) { border-left-color: #ff9f43; }
+        
+        .history-section { 
+            background: var(--panel-color); padding: 25px; border-radius: 12px; 
+            overflow-y: hidden; height: 100%; display: flex; flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .search-box { background: #202225; border: 1px solid #40444b; padding: 12px; border-radius: 8px; color: white; width: 100%; margin-bottom: 15px; font-size: 1em; }
+        input, select { 
+            margin-bottom: 0; width: 100%; box-sizing: border-box; padding: 12px; 
+            background: #40444b; border: 1px solid #2f3136; color: white; border-radius: 6px; 
+            height: 45px; font-size: 0.95em; -webkit-app-region: no-drag !important;
+        }
+        input:focus, select:focus { outline: 2px solid #5865f2; }
+        h3 { color: #fff; margin: 0 0 10px 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-size: 1.1em; }
+        label { color: #b9bbbe; font-size: 0.85em; margin-bottom: 4px; margin-top: 5px; display:block; font-weight: bold;}
+        
+        button { background: #5865f2; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: auto; transition: 0.2s; }
+        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .logout-btn { background-color: #ed4245; margin-top: 15px; padding: 15px; font-size: 1.1em; }
+        
+        .list-btn-group { float: right; display: flex; gap: 5px; }
+        .del-btn { background: #ed4245; width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
+        .pdf-btn { background: #ff9f43; width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
+        
+        .common-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; color: white; vertical-align: middle; margin-right: 5px; line-height: 1.2; }
+        .badge-dept { background: #5865f2; } 
+        .badge-patient { background: #3ba55c; } 
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; }
+        .alert-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #5865f2; text-align: center; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .view-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #3ba55c; width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+        .soap-row { margin-bottom: 15px; }
+        .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        .soap-text { background: #202225; padding: 10px; border-radius: 6px; color: #dcddde; white-space: pre-wrap; line-height: 1.5; border: 1px solid #2f3136; }
+        .writer-name { color: #ffd700; font-weight: bold; }
+        .writer-major { color: #ffd700; font-size: 0.9em; }
+        .modal-msg { color: white; font-size: 1.1em; margin-bottom: 20px; line-height: 1.5; }
+        .modal-btn-group { display: flex; justify-content: center; gap: 10px; }
+        .modal-btn { width: auto; padding: 10px 25px; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: #2f3136; }
+    </style>
+</head>
+<body>
+    <div id="alert-modal" class="modal-overlay">
+        <div class="alert-box">
+            <div id="alert-text" class="modal-msg">알림 내용</div>
+            <div class="modal-btn-group">
+                <button id="btn-ok" class="modal-btn" onclick="closeAlert()">확인</button>
+                <button id="btn-yes" class="modal-btn" style="background:#ed4245; display:none;">삭제</button>
+                <button id="btn-no" class="modal-btn" style="background:#4f545c; display:none;" onclick="closeAlert()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="view-modal" class="modal-overlay">
+        <div class="view-box">
+            <div class="view-header">
+                <div>
+                    <h2 style="color:white; margin:0;">📄 차팅 상세</h2>
+                    <div style="color:#b9bbbe; margin-top:5px; font-size:0.9em;">
+                        항목: <span id="v-patient" style="color:white; font-weight:bold;">-</span> |
+                        콘텐츠: <span id="v-dept" style="color:#5865f2; font-weight:bold;">-</span>
+                    </div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="color:#72767d; font-size:0.9em;" id="v-date">-</div>
+                    <div style="margin-top:5px;">작성: <span id="v-writer" class="writer-name">-</span></div>
+                </div>
+            </div>
+            
+            <div class="view-content">
+                <div class="soap-row"><span class="soap-label">Description (설명)</span><div id="v-s" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Objective (객관적 사실 및 목표)</span><div id="v-o" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
+            </div>
+            <div style="margin-top:20px; text-align:right;">
+                <button onclick="closeView()" style="width:auto; padding:10px 30px; background:#4f545c;">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app-container">
+        <div class="header">
+            <h2 style="margin:0; color:#fff; text-align: center; line-height: 1.3;">
+                🛡️ NOTE DATA 관리자 시스템
+            </h2>
+        </div>
+
+        <div class="admin-grid">
+            <div class="left-col">
+                <div class="form-section">
+                    <h3>1. 콘텐츠 등록</h3>
+                    <label>콘텐츠 ID</label> <input id="new-dept-id" placeholder="ex: MJT">
+                    <label>콘텐츠 이름</label> <input id="new-dept-name" placeholder="ex: 모히또 리조트">
+                    <button onclick="addDept()">추가하기</button>
+                </div>
+                
+                <div class="form-section">
+                    <h3>2. 항목 등록</h3>
+                    <label>항목 이름</label> <input id="p-name" placeholder="예: 홍길동">
+                    <label>차트 번호 (자동)</label> 
+                    <div style="display:flex; gap:5px; margin-bottom: 5px;">
+                        <input id="p-id" placeholder="생성 중..." style="background:#2f3136; color:#00ffcc; font-weight:bold;">
+                        <button onclick="generateChartId()" style="width:40px; padding:0; background:#4f545c; font-size:1.2em;" title="새 번호 생성">🎲</button>
+                    </div>
+                    <label>담당</label>
+                    <select id="p-incharge"><option value="">-- 담당진 로딩중 --</option></select>
+                    <label>소속 콘텐츠</label> 
+                    <select id="p-dept"><option value="">-- 콘텐츠 로딩중 --</option></select>
+                    <button onclick="addPatient()" style="background: #3ba55c;">항목 등록</button>
+                </div>
+                
+                <div class="form-section">
+                    <h3>3. 개발진 계정</h3>
+                    <label>아이디 & 비밀번호</label>
+                    <div style="display:flex; gap:10px; margin-bottom: 5px;">
+                        <input id="u-id" placeholder="ID" style="flex:1;"> <input id="u-pw" type="password" placeholder="PW" style="flex:1;">
+                    </div>
+                    <label>이름 & 분야</label>
+                    <div style="display:flex; gap:10px;">
+                        <input id="u-name" placeholder="이름" style="flex:1.5;"> <input id="u-major" placeholder="전공" style="flex:1;">
+                    </div>
+                    <label>권한</label>
+                    <select id="u-role"> 
+                        <option value="doctor">개발자 (Dev)</option> 
+                        <option value="admin">관리자 (Admin)</option> 
+                        <option value="viewer">열람 전용 (Viewer)</option>
+                    </select>
+                    <button onclick="addUser()" style="background: #eb459e;">계정 생성</button>
+                </div>
+                
+                <div class="form-section">
+                    <h3>4. 담당 변경</h3>
+                    <label>대상 항목 선택</label>
+                    <select id="update-p-id"><option value="">-- 항목 선택 --</option></select>
+                    <label>새로운 담당</label>
+                    <select id="update-doc-id"><option value="">-- 개발진 선택 --</option></select>
+                    <button onclick="updatePatientDoctor()" style="background: #ff9f43;">담당 변경</button>
+                </div>
+                <button class="logout-btn" onclick="window.location.href='login.ejs'">🚪 로그아웃</button>
+            </div>
+
+            <div class="history-section">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="margin:0; border:none; padding:0;">📋 차팅 기록 관리</h3>
+                    <button onclick="loadAllCharts()" style="width:auto; background:#4f545c; font-size:0.9em; padding: 4px 10px; margin:0;">🔄 새로고침</button>
+                </div>
+                <input type="text" id="search-input" class="search-box" placeholder="🔍 검색..." onkeyup="filterCharts()">
+                <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+                    <ul id="chart-list" style="list-style: none; padding: 0;">
+                        <li style="color:#72767d; text-align:center; padding:20px;">데이터 로딩중...</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const path = require('path'); 
+
+        let allCharts = [];
+        let existingPatientIds = []; 
+        let allPatients = [];
+        let allDepts = [];
+
+        window.onload = function() { refreshAllData(); };
+        function refreshAllData() {
+            ipcRenderer.send('request-metadata');
+            ipcRenderer.send('admin-get-charts');
+        }
+
+        function findPatientName(id, savedName) {
+            const found = allPatients.find(p => p.id === id);
+            if (found) return found.name;
+            if (savedName) return savedName;
+            return id;
+        }
+
+        function findDeptName(patientId, savedDeptName) {
+            if (savedDeptName && savedDeptName !== 'Unknown') return savedDeptName;
+            const foundPatient = allPatients.find(p => p.id === patientId);
+            if (foundPatient && foundPatient.deptId) {
+                const foundDept = allDepts.find(d => d.id === foundPatient.deptId);
+                return foundDept ? foundDept.name : foundPatient.deptId;
+            }
+            return 'General';
+        }
+
+        function generateChartId() {
+            const chars = 'abcdef0123456789';
+            let newId = '';
+            let isUnique = false;
+            for(let k=0; k<100; k++) {
+                newId = '';
+                for (let i = 0; i < 7; i++) { newId += chars.charAt(Math.floor(Math.random() * chars.length)); }
+                if (!existingPatientIds.includes(newId)) { isUnique = true; break; }
+            }
+            if(isUnique) document.getElementById('p-id').value = newId;
+            else document.getElementById('p-id').value = 'P' + Date.now().toString().slice(-5);
+        }
+
+        function showAlert(msg) {
+            document.getElementById('alert-text').innerText = msg;
+            document.getElementById('btn-ok').style.display = 'inline-block';
+            document.getElementById('btn-yes').style.display = 'none';
+            document.getElementById('btn-no').style.display = 'none';
+            document.getElementById('alert-modal').style.display = 'flex';
+        }
+        function showConfirm(msg, callback) {
+            document.getElementById('alert-text').innerText = msg;
+            document.getElementById('btn-ok').style.display = 'none';
+            document.getElementById('btn-yes').style.display = 'inline-block';
+            document.getElementById('btn-no').style.display = 'inline-block';
+            document.getElementById('alert-modal').style.display = 'flex';
+            const yesBtn = document.getElementById('btn-yes');
+            yesBtn.onclick = function() { callback(); closeAlert(); };
+        }
+        function closeAlert() { document.getElementById('alert-modal').style.display = 'none'; }
+
+        function openView(item) {
+            const sData = item.soapData || {};
+            const writerName = item.doctorName || item.doctorId;
+            const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
+            
+            const realName = findPatientName(item.patientId, item.patientName);
+            const realDept = findDeptName(item.patientId, item.deptName);
+
+            document.getElementById('v-dept').innerText = realDept;
+            document.getElementById('v-patient').innerText = `${realName} (${item.patientId})`;
+            
+            document.getElementById('v-writer').innerHTML = `${writerName} <span class="writer-major">${writerMajor}</span>`;
+            document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
+            
+            document.getElementById('v-s').innerText = sData.s || sData.S || '-';
+            document.getElementById('v-o').innerText = sData.o || sData.O || '-';
+            document.getElementById('v-a').innerText = sData.a || sData.A || '-';
+            document.getElementById('v-p').innerText = sData.p || sData.P || '-';
+            
+            document.getElementById('view-modal').style.display = 'flex';
+        }
+        function closeView() { document.getElementById('view-modal').style.display = 'none'; }
+
+        function addDept() {
+            const id = document.getElementById('new-dept-id').value.trim();
+            const name = document.getElementById('new-dept-name').value.trim();
+            if(id && name) ipcRenderer.send('admin-add-dept', { id, name }); else showAlert('ID와 이름을 입력하세요.');
+        }
+        
+        function addPatient() {
+            const name = document.getElementById('p-name').value.trim();
+            const id = document.getElementById('p-id').value.trim();
+            const deptId = document.getElementById('p-dept').value;
+            const inChargeId = document.getElementById('p-incharge').value;
+            if(name && id && deptId && inChargeId) {
+                ipcRenderer.send('admin-add-patient', { id, name, deptId, inChargeId });
+            } else { showAlert('모든 정보(담당 포함)를 입력하세요.'); }
+        }
+        
+        function addUser() {
+            const id = document.getElementById('u-id').value.trim();
+            const pw = document.getElementById('u-pw').value.trim();
+            const name = document.getElementById('u-name').value.trim();
+            const role = document.getElementById('u-role').value;
+            const major = document.getElementById('u-major').value.trim();
+            if(id && pw && name) ipcRenderer.send('admin-add-user', { id, pw, name, role, major }); else showAlert('필수 정보를 입력하세요.');
+        }
+
+        function updatePatientDoctor() {
+            const patientId = document.getElementById('update-p-id').value;
+            const doctorId = document.getElementById('update-doc-id').value;
+            if (patientId && (doctorId || doctorId === 'unassigned')) {
+                ipcRenderer.send('admin-update-patient', { id: patientId, inChargeId: doctorId });
+            } else { showAlert('항목과 변경할 담당을 선택해주세요.'); }
+        }
+
+        function deleteChart(id) {
+            showConfirm('정말 삭제하시겠습니까?', () => { ipcRenderer.send('admin-delete-chart', id); });
+        }
+
+        // ★ [업그레이드] 글이 끊기지 않고 자연스럽게 다음 장으로 이어지는 PDF (MS Word 방식)
+        function saveAsPDF(item) {
+            const realName = findPatientName(item.patientId, item.patientName);
+            const realDept = findDeptName(item.patientId, item.deptName);
+            const writerName = item.doctorName || item.doctorId;
+            const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
+            const sData = item.soapData || {};
+
+            const clean = (text) => (!text || text === '-') ? '' : text;
+            const logoPath = path.join(__dirname, '../assets/logo.png').replace(/\\/g, '/');
+
+            const htmlContent = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        @page { size: A4; margin: 15mm; }
+                        body { font-family: 'Segoe UI', sans-serif; background: #fff; color: #000; padding: 0; box-sizing: border-box; }
+                        .header { border-bottom: 3px solid #333; padding-bottom: 5px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
+                        td { border: 1px solid #999; padding: 6px; }
+                        .td-label { background: #f0f0f0; font-weight: bold; width: 90px; text-align: center; }
+                        .section { margin-bottom: 20px; font-size: 11px; } 
+                        .sec-title { 
+                            font-size: 12px; font-weight: bold; margin-bottom: 4px; 
+                            border-left: 4px solid #333; padding-left: 8px; color: #333; 
+                            page-break-after: avoid; break-after: avoid; 
+                        }
+                        .sec-content { 
+                            line-height: 1.6; background: #fbfbfb; padding: 12px; 
+                            border: 1px solid #ddd; white-space: pre-wrap; 
+                            min-height: 30px; word-break: break-all; 
+                            widows: 2; orphans: 2; 
+                        }
+                        .signature {
+                            text-align: right; margin-top: 20px; padding-top: 10px; 
+                            border-top: 1px solid #ccc; font-size: 12px; font-weight: bold; 
+                            page-break-inside: avoid; break-inside: avoid;
+                        }
+                        * { -webkit-print-color-adjust: exact; color-adjust: exact; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div>
+                            <h1 style="font-size: 28px; font-weight: bold; margin: 0;">BlockTeam SUMMARY</h1>
+                            <div style="font-size: 10px; color: #666; margin-top: 3px;">Printed: ${new Date().toLocaleString()}</div>
+                        </div>
+                        <img src="file://${logoPath}" style="height: 50px; object-fit: contain;">
+                    </div>
+
+                    <table>
+                        <tr>
+                            <td class="td-label">항목</td>
+                            <td>${realName} (${item.patientId})</td>
+                            <td class="td-label">콘텐츠</td>
+                            <td>${realDept}</td>
+                        </tr>
+                        <tr>
+                            <td class="td-label">작성일</td>
+                            <td>${new Date(item.savedAt).toLocaleString()}</td>
+                            <td class="td-label">작성자</td>
+                            <td>${writerName} ${writerMajor}</td>
+                        </tr>
+                    </table>
+
+                    <div class="section"><div class="sec-title">Description (설명)</div><div class="sec-content">${clean(sData.s || sData.S)}</div></div>
+                    <div class="section"><div class="sec-title">Objective (객관적 사실)</div><div class="sec-content">${clean(sData.o || sData.O)}</div></div>
+                    <div class="section"><div class="sec-title">Assessment (평가)</div><div class="sec-content">${clean(sData.a || sData.A)}</div></div>
+                    <div class="section"><div class="sec-title">Plan (계획)</div><div class="sec-content">${clean(sData.p || sData.P)}</div></div>
+
+                    <div class="signature">
+                        전자서명자: ${writerName} ${writerMajor}
+                    </div>
+                </body>
+                </html>
+            `;
+
+            const datePart = new Date(item.savedAt).toISOString().slice(0,10);
+            const safeName = realName.replace(/[\\/:*?"<>|]/g, ""); 
+            const filename = `${safeName}(${item.patientId})_${datePart}.pdf`;
+
+            ipcRenderer.send('generate-real-pdf', { html: htmlContent, filename: filename });
+        }
+
+        ipcRenderer.on('action-result', (e, msg) => {
+            showAlert(msg);
+            const ids = ['new-dept-id', 'new-dept-name', 'p-name', 'u-id', 'u-pw', 'u-name', 'u-major'];
+            ids.forEach(id => document.getElementById(id).value = '');
+            document.getElementById('p-incharge').value = '';
+            document.getElementById('p-dept').value = '';
+            document.getElementById('u-role').value = 'doctor';
+            document.getElementById('update-p-id').value = '';
+            document.getElementById('update-doc-id').value = '';
+            generateChartId();
+            refreshAllData();
+        });
+
+        function filterCharts() {
+            const keyword = document.getElementById('search-input').value.toLowerCase();
+            const filtered = allCharts.filter(c => {
+                const pName = findPatientName(c.patientId, c.patientName).toLowerCase();
+                return (c.patientId && c.patientId.toLowerCase().includes(keyword)) ||
+                       (pName && pName.includes(keyword));
+            });
+            renderCharts(filtered);
+        }
+        function loadAllCharts() { refreshAllData(); }
+
+        ipcRenderer.on('receive-metadata', (e, data) => {
+            allPatients = data.patients || [];
+            allDepts = data.departments || [];
+            
+            const deptSelect = document.getElementById('p-dept');
+            deptSelect.innerHTML = '<option value="">-- 콘텐츠 --</option>';
+            
+            if (data.departments) data.departments.forEach(d => deptSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`);
+
+            const docSelect = document.getElementById('p-incharge');
+            const updateDocSelect = document.getElementById('update-doc-id');
+            const currentDoc = docSelect.value;
+            
+            const docOptions = '<option value="">-- 개발진 선택 --</option>';
+            docSelect.innerHTML = docOptions;
+            updateDocSelect.innerHTML = '<option value="">-- 변경할 개발진 선택 --</option>';
+            updateDocSelect.innerHTML += `<option value="unassigned" style="color:#ed4245; font-weight:bold;">⛔ 배정 해제 (None)</option>`;
+
+            if (data.users) {
+                data.users.forEach(u => {
+                    if(u.role === 'doctor' || u.role === 'admin') {
+                        const majorText = u.major ? `(${u.major})` : '';
+                        const opt = `<option value="${u.id}">${u.name} ${majorText}</option>`;
+                        docSelect.innerHTML += opt;
+                        updateDocSelect.innerHTML += opt;
+                    }
+                });
+            }
+            if(currentDoc) docSelect.value = currentDoc;
+
+            const updatePatientSelect = document.getElementById('update-p-id');
+            updatePatientSelect.innerHTML = '<option value="">-- 항목 선택 --</option>';
+            if (data.patients) {
+                existingPatientIds = data.patients.map(p => p.id);
+                data.patients.forEach(p => {
+                    updatePatientSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.id})</option>`;
+                });
+            }
+
+            if (!document.getElementById('p-id').value) generateChartId();
+            if (allCharts.length > 0) renderCharts(allCharts);
+        });
+
+        ipcRenderer.on('admin-charts-data', (e, list) => {
+            allCharts = list.reverse();
+            renderCharts(allCharts);
+        });
+
+        function renderCharts(list) {
+            const ul = document.getElementById('chart-list');
+            ul.innerHTML = '';
+            if(!list || list.length === 0) {
+                ul.innerHTML = '<li style="color:#72767d; text-align:center; padding:20px;">데이터 없음</li>';
+                return;
+            }
+            list.forEach(c => {
+                const li = document.createElement('li');
+                li.style.cssText = 'background:#2f3136; margin-bottom:10px; border-radius:8px; padding:15px; border:1px solid #202225; cursor:pointer; transition:0.2s;';
+                li.onmouseover = function() { this.style.borderColor = '#5865f2'; };
+                li.onmouseout = function() { this.style.borderColor = '#202225'; };
+                
+                li.onclick = function() { openView(c); };
+
+                const writerName = c.doctorName || c.doctorId;
+                const writerMajor = c.doctorMajor ? `(${c.doctorMajor})` : '';
+                const dateStr = new Date(c.savedAt).toLocaleString();
+                const realName = findPatientName(c.patientId, c.patientName);
+                const realDept = findDeptName(c.patientId, c.deptName);
+
+                const itemJson = JSON.stringify(c).replace(/"/g, '&quot;');
+
+                li.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:8px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <div>
+                                <span class="common-badge badge-dept">${realDept}</span>
+                                <span class="common-badge badge-patient">${realName} (${c.patientId})</span>
+                            </div>
+                            <div class="list-btn-group">
+                                <button class="pdf-btn" onclick="event.stopPropagation(); saveAsPDF(${itemJson})">📄 PDF</button>
+                                <button class="del-btn" onclick="event.stopPropagation(); deleteChart(${c.id})">삭제</button>
+                            </div>
+                        </div>
+
+                        <div style="font-size:0.85em; color:#99aab5;">
+                            <span>${dateStr}</span>
+                            <span style="color:#4f545c; margin: 0 5px;">|</span>
+                            <span class="writer-name">${writerName}<span class="writer-major">${writerMajor}</span></span>
+                        </div>
+
+                        <div style="color:#fff; font-weight:bold; font-size:1em; line-height: 1.4; white-space: normal; word-break: break-all;">
+                            ${c.soapData.a || c.soapData.s || '내용 없음'}
+                        </div>
+                    </div>
+                `;
+                ul.appendChild(li);
+            });
+        }
+        ipcRenderer.on('auto-sync-updated', () => {
+        console.log("⚡ [실시간 감지] 새 차트가 들어와 목록을 자동으로 갱신합니다.");
+        refreshAllData(); // 전체 메타데이터 및 차트 목록 새로고침
+        });
+    </script>
+</body>
+</html>

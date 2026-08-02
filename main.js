@@ -114,9 +114,57 @@ async function loadEverythingToCache() {
 
     console.log("⚡ 캐싱 완료! 이제부터 모든 로딩이 즉시 처리됩니다.");
     
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('cache-loaded');
     }
+}
+
+// ====================================================================
+// ★ 🔄 백그라운드 자동 동기화 시스템 (NEW!)
+// ====================================================================
+let autoSyncTimer = null;
+
+function startAutoSync() {
+    if (autoSyncTimer) clearInterval(autoSyncTimer);
+
+    // 10초(10000ms)마다 백그라운드에서 조용히 구글 드라이브 변경 사항 감지
+    autoSyncTimer = setInterval(async () => {
+        if (!localCache.isLoaded) return;
+
+        try {
+            const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, false);
+            if (!chartsFolderId) return;
+
+            const chartFolders = await drive.files.list({
+                q: `'${chartsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+                fields: 'files(id)'
+            });
+
+            let latestCharts = [];
+            if (chartFolders.data && chartFolders.data.files) {
+                for (const folder of chartFolders.data.files) {
+                    const chartsInDept = await getAllJsonInFolder(folder.id);
+                    latestCharts = latestCharts.concat(chartsInDept);
+                }
+            }
+
+            const validCharts = latestCharts.filter(c => c !== null && c.savedAt);
+
+            // 캐시 데이터의 개수가 다르거나 최신 데이터에 변동이 생긴 경우
+            if (validCharts.length !== localCache.charts.length) {
+                console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 구글 드라이브에서 발견되었습니다!");
+                localCache.charts = validCharts;
+
+                // 렌더러(화면) 측으로 갱신 이벤트 전송
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('auto-sync-updated');
+                }
+            }
+        } catch (err) {
+            // 네트워크 변동 등으로 인한 실패 시 조용히 대기
+            console.log("백그라운드 동기화 대기 중...");
+        }
+    }, 10000); // 10초 주기
 }
 
 // ====================================================================
@@ -163,7 +211,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    loadEverythingToCache(); 
+    loadEverythingToCache().then(() => {
+        startAutoSync(); // 전체 초기 로딩 완료 후 백그라운드 자동 동기화 타이머 시작
+    });
     createWindow();
 });
 
