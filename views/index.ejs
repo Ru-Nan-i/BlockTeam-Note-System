@@ -25,7 +25,7 @@
             height: 100%; overflow: hidden; position: relative;
         }
 
-        /* ★ [핵심] 차트 섹션 전체 드래그 방지 */
+        /* ★ 차트 섹션 전체 드래그 방지 */
         .chart-section { -webkit-app-region: no-drag !important; }
 
         /* 2. 입력창 영역 */
@@ -34,15 +34,14 @@
             margin-bottom: 15px; min-height: 0; position: relative; z-index: 10; 
         }
 
-        /* 3. 입력창 스타일 (강력한 입력 허용 설정) */
+        /* 3. 입력창 스타일 */
         textarea { 
             width: 100%; box-sizing: border-box; height: 300px; margin-bottom: 15px; 
             background: #40444b; border: 1px solid #2f3136; color: white; 
             padding: 12px; border-radius: 6px; resize: none; font-size: 1em; line-height: 1.4;
             font-family: 'Segoe UI', sans-serif;
-            position: relative; z-index: 20; /* 다른 요소보다 위에 배치 */
+            position: relative; z-index: 20;
             
-            /* 입력 방해 요소 차단 */
             -webkit-app-region: no-drag !important;
             -webkit-user-select: text !important;
             user-select: text !important;
@@ -306,7 +305,6 @@
             document.getElementById('view-modal').style.display = 'none';
         }
 
-        // ★ [핵심] 불러오기: confirm 제거 -> 입력 먹통 방지
         function loadFromHistory() {
             if (myRole === 'viewer') return;
             if (!currentViewData) return;
@@ -317,7 +315,6 @@
             document.getElementById('a').value = data.a || data.A || '';
             document.getElementById('p').value = data.p || data.P || '';
             
-            // 불러왔음을 표시 (버튼 색상 변경)
             const btn = document.getElementById('btn-save-action');
             if(btn) {
                 btn.innerText = "✨ 새 기록으로 저장 (New Save)";
@@ -325,8 +322,6 @@
             }
             
             closeView();
-            
-            // ★ 강제 포커스로 입력 활성화 보장
             setTimeout(() => { document.getElementById('s').focus(); }, 50);
         }
 
@@ -350,7 +345,6 @@
             const a = document.getElementById('a').value;
             const p = document.getElementById('p').value;
             if(!s && !o && !a && !p) {
-                // 간단한 토스트 메시지나 콘솔 로그로 대체 (alert 금지)
                 console.log('내용을 입력해주세요.'); 
                 return;
             }
@@ -367,31 +361,29 @@
             if(pid && pid !== '-') ipcRenderer.send('request-history', pid);
         }
 
-        // ★ [핵심] 저장 성공 시 Alert 금지 -> 버튼 UI로 피드백
-        ipcRenderer.on('save-success', (e, msg) => {
+        // ★ [개선] 저장 완료 시 즉시 오른쪽 히스토리 리프레시 + UI 피드백
+        ipcRenderer.on('save-success', (e, res) => {
             requestRefresh();
             hardResetInputs(); 
             
             const btn = document.getElementById('btn-save-action');
             if(btn) {
-                const originalText = btn.innerText;
-                const originalColor = btn.style.backgroundColor;
-                
                 btn.innerText = "✅ 저장 완료!";
-                btn.style.backgroundColor = "#3ba55c"; // 초록색
+                btn.style.backgroundColor = "#3ba55c";
                 
                 setTimeout(() => {
                     btn.innerText = "💾 저장하기 (Save)";
-                    btn.style.backgroundColor = "#5865f2"; // 파란색 복귀
+                    btn.style.backgroundColor = "#5865f2";
                 }, 1500);
             }
         });
 
         ipcRenderer.on('save-failed', (e, msg) => console.error(msg));
-        // 🔄 백그라운드 실시간 동기화 수신 (차트 작성 화면용)
+
+        // 🔄 백그라운드 실시간 동기화 수신
         ipcRenderer.on('auto-sync-updated', () => {
-            console.log("⚡ [실시간 감지] 현재 환자의 차트 기록을 자동으로 새로고침합니다.");
-            requestRefresh(); // 현재 환자의 차팅 기록 새로고침
+            console.log("⚡ [실시간 감지] 현재 차트 기록을 자동으로 새로고침합니다.");
+            requestRefresh();
         });
     </script>
 </body>

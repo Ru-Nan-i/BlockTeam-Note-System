@@ -16,7 +16,7 @@ let currentUserRole = 'doctor';
 const CLIENT_ID = ''; 
 const CLIENT_SECRET = ''; 
 const REFRESH_TOKEN = '';
-const STORAGE_DB_ID = ''; 
+const STORAGE_DB_ID = '';
 
 const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, "https://developers.google.com/oauthplayground");
 oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
@@ -120,7 +120,7 @@ async function loadEverythingToCache() {
 }
 
 // ====================================================================
-// ★ 🔄 백그라운드 자동 동기화 시스템 (NEW!)
+// ★ 🔄 백그라운드 자동 동기화 시스템 (안전 병합 반영)
 // ====================================================================
 let autoSyncTimer = null;
 
@@ -150,21 +150,25 @@ function startAutoSync() {
 
             const validCharts = latestCharts.filter(c => c !== null && c.savedAt);
 
-            // 캐시 데이터의 개수가 다르거나 최신 데이터에 변동이 생긴 경우
-            if (validCharts.length !== localCache.charts.length) {
-                console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 구글 드라이브에서 발견되었습니다!");
-                localCache.charts = validCharts;
+            // ★ [개선] 로컬 캐시와 드라이브 데이터 병합 (업로드 중인 새 데이터 덮어쓰기 방지)
+            const chartMap = new Map();
+            localCache.charts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
+            validCharts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
 
-                // 렌더러(화면) 측으로 갱신 이벤트 전송
+            const mergedCharts = Array.from(chartMap.values());
+
+            if (mergedCharts.length !== localCache.charts.length) {
+                console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 구글 드라이브에서 발견되었습니다!");
+                localCache.charts = mergedCharts;
+
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('auto-sync-updated');
                 }
             }
         } catch (err) {
-            // 네트워크 변동 등으로 인한 실패 시 조용히 대기
             console.log("백그라운드 동기화 대기 중...");
         }
-    }, 10000); // 10초 주기
+    }, 10000);
 }
 
 // ====================================================================
@@ -203,7 +207,7 @@ function createWindow() {
           // 2. 캐시 데이터 다시 긁어오기 (구글 드라이브 통신)
           await loadEverythingToCache();
           
-          // 3. 완료되면 화면 새로고침 (오버레이도 자연스럽게 사라지고 최신 데이터 반영)
+          // 3. 완료되면 화면 새로고침
           console.log("✅ 동기화 완료: 화면을 새로고침합니다.");
           mainWindow.reload();
       }
@@ -212,7 +216,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
     loadEverythingToCache().then(() => {
-        startAutoSync(); // 전체 초기 로딩 완료 후 백그라운드 자동 동기화 타이머 시작
+        startAutoSync(); 
     });
     createWindow();
 });
@@ -268,22 +272,26 @@ ipcMain.on('request-patient-data', (event) => {
     }
 });
 
-// 5. 차팅 저장 (캐시 즉시 반영 + 드라이브 백그라운드 업로드)
+// 5. 차팅 저장 (작성자 정보 자동 바인딩 + 캐시 즉시 반영 + 드라이브 백그라운드 업로드)
 ipcMain.on('save-soap-signed', async (event, payload) => {
     if (currentUserRole === 'viewer') return event.reply('save-failed', '권한이 없습니다.');
     
     const timestamp = Date.now();
+    const docUser = localCache.users.find(u => u.id === currentDoctorId);
+
     const requestData = {
         id: timestamp,
         soapData: payload.soapData,
         signature: "Signed by " + currentDoctorId,
         doctorId: currentDoctorId,
+        doctorName: docUser ? docUser.name : currentDoctorId,
+        doctorMajor: docUser ? docUser.major : '',
         patientId: currentPatient.id,
         savedAt: new Date(timestamp).toISOString()
     };
 
     localCache.charts.push(requestData);
-    event.reply('save-success', `✅ 저장 완료! (클라우드 동기화 중...)`);
+    event.reply('save-success', { msg: `✅ 저장 완료!`, savedItem: requestData });
 
     try {
         const dept = localCache.departments.find(d => d.id === currentPatient.deptId);
