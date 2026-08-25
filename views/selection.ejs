@@ -131,8 +131,7 @@
                 ◀ 왼쪽에서 콘텐츠를 선택하세요
             </h3>
             
-            <div id="grid" class="patient-grid">
-                </div>
+            <div id="grid" class="patient-grid"></div>
         </div>
     </div>
 
@@ -146,7 +145,7 @@
 
         window.onload = () => {
             requestData();
-            // ★ [추가됨] 3초마다 자동으로 데이터 새로고침 (Auto-Polling)
+            // 3초마다 데이터 새로고침
             setInterval(requestData, 3000);
         };
 
@@ -155,63 +154,79 @@
         }
 
         ipcRenderer.on('receive-metadata', (e, data) => {
-            // 데이터 업데이트
             allDepts = data.departments || [];
             allPatients = data.patients || [];
             doctorList = data.users || []; 
 
-            // 사이드바 그리기 (이미 그려져 있고 개수가 같으면 다시 안 그림 -> 깜빡임 방지)
             const sidebar = document.getElementById('dept-list');
-            // 협진 탭 포함해서 개수 계산 (협진 1개 + 진료과 N개)
             const currentItemCount = sidebar.querySelectorAll('.dept-item').length;
-            const newItemCount = allDepts.length + 1; // +1은 협진 탭
+            const newItemCount = allDepts.length + 1;
 
             if (currentItemCount !== newItemCount) {
                 renderDepartments();
             }
             
-            // ★ 데이터가 갱신되었으므로, 현재 보고 있는 환자 목록도 즉시 새로고침
             if (currentDeptId) {
                 filterPatients();
             }
         });
 
-        // 1. 진료과 목록 그리기 (왼쪽)
+        // 1. 진료과/콘텐츠 목록 렌더링 및 이전 선택 부서 자동 복원
         function renderDepartments() {
             const sidebar = document.getElementById('dept-list');
             sidebar.innerHTML = ''; 
 
-            // ★ [추가됨] 협진(Consultation) - 전체 환자 검색 탭
+            const savedDeptId = sessionStorage.getItem('lastSelectedDeptId');
+            const savedDeptName = sessionStorage.getItem('lastSelectedDeptName');
+            let targetElement = null;
+
+            // 전체 검색 탭 생성
             const consultDiv = document.createElement('div');
             consultDiv.className = 'dept-item';
             consultDiv.innerText = '🤝 전체 검색';
-            consultDiv.style.color = '#3ba55c'; // 녹색으로 강조
+            consultDiv.style.color = '#3ba55c';
             consultDiv.style.borderColor = '#3ba55c';
             consultDiv.onclick = () => selectDept('CONSULT', '전체', consultDiv);
             sidebar.appendChild(consultDiv);
 
-            if (allDepts.length === 0) {
-                sidebar.innerHTML += '<div style="padding:10px; color:#72767d;">등록된 콘텐츠 없음</div>';
-                return;
+            if (savedDeptId === 'CONSULT') {
+                targetElement = consultDiv;
             }
 
-            allDepts.forEach(d => {
-                const div = document.createElement('div');
-                div.className = 'dept-item';
-                div.innerText = d.name; 
-                div.onclick = () => selectDept(d.id, d.name, div);
-                sidebar.appendChild(div);
-            });
+            if (allDepts.length === 0) {
+                sidebar.innerHTML += '<div style="padding:10px; color:#72767d;">등록된 콘텐츠 없음</div>';
+            } else {
+                allDepts.forEach(d => {
+                    const div = document.createElement('div');
+                    div.className = 'dept-item';
+                    div.innerText = d.name; 
+                    div.onclick = () => selectDept(d.id, d.name, div);
+                    sidebar.appendChild(div);
+
+                    if (savedDeptId === d.id) {
+                        targetElement = div;
+                    }
+                });
+            }
+
+            // ★ 이전에 선택했던 부서가 존재하면 해당 탭을 자동 활성화
+            if (savedDeptId && targetElement && !currentDeptId) {
+                selectDept(savedDeptId, savedDeptName || '', targetElement);
+            }
         }
 
-        // 2. 진료과 선택
+        // 2. 진료과/콘텐츠 선택 (세션 저장 포함)
         function selectDept(deptId, deptName, element) {
             currentDeptId = deptId;
+            
+            // ★ 선택한 부서 상태를 브라우저 세션에 저장
+            sessionStorage.setItem('lastSelectedDeptId', deptId);
+            sessionStorage.setItem('lastSelectedDeptName', deptName);
+
             const items = document.querySelectorAll('.dept-item');
             items.forEach(i => i.classList.remove('active'));
             if(element) element.classList.add('active');
 
-            // 협진 모드일 때와 일반 모드일 때 안내 메시지 다르게
             if (deptId === 'CONSULT') {
                 document.getElementById('current-dept-title').innerText = `🤝 전체 항목 검색`;
                 document.getElementById('search').placeholder = "🔍 전체 항목 중 이름/번호 검색...";
@@ -231,7 +246,6 @@
             const keyword = document.getElementById('search').value.toLowerCase();
             
             const filtered = allPatients.filter(p => {
-                // ★ [핵심] 협진(CONSULT) 모드이면 진료과 상관없이 검색
                 const matchDept = (currentDeptId === 'CONSULT') ? true : (p.deptId === currentDeptId);
                 const matchKeyword = p.name.toLowerCase().includes(keyword) || p.id.toLowerCase().includes(keyword);
                 return matchDept && matchKeyword;
@@ -267,7 +281,6 @@
                     ipcRenderer.send('patient-selected', p); 
                 };
                 
-                // 협진 모드일 때는 환자가 어느 과인지 보여주는 게 좋음
                 const deptTag = (currentDeptId === 'CONSULT') 
                     ? `<span style="background:#5865f2; font-size:0.7em; padding:2px 5px; border-radius:3px; float:right;">${p.deptId}</span>` 
                     : '';
