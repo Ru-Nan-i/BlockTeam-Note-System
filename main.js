@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
 const { google } = require('googleapis');
@@ -11,7 +12,48 @@ let currentPatient = null;
 let currentUserRole = 'doctor';
 
 // ====================================================================
-// ★ 1. 구글 드라이브 API 세팅
+// ★ 자동 업데이트(electron-updater) 설정
+// ====================================================================
+if (!app.isPackaged) {
+    // 개발 모드(npm start)에서 dev-app-update.yml을 참조해 테스트할 때 사용
+    autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml');
+}
+
+autoUpdater.autoDownload = true; // 새 버전 발견 시 백그라운드 자동 다운로드
+autoUpdater.autoInstallOnAppQuit = true; // 앱 종료 시 자동 설치
+
+autoUpdater.on('checking-for-update', () => {
+    console.log('🔄 [업데이트] GitHub Releases 최신 버전 검사 중...');
+});
+
+autoUpdater.on('update-available', (info) => {
+    console.log(`✨ [업데이트] 새 버전 발견: v${info.version}`);
+});
+
+autoUpdater.on('update-not-available', () => {
+    console.log('✅ [업데이트] 현재 최신 버전을 사용 중입니다.');
+});
+
+autoUpdater.on('error', (err) => {
+    console.error('❌ [업데이트 오류]:', err);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+    console.log(`📥 [업데이트] v${info.version} 다운로드 완료.`);
+    dialog.showMessageBox({
+        type: 'info',
+        title: '업데이트 설치 알림',
+        message: `새로운 버전(v${info.version})이 다운로드되었습니다.\n지금 프로그램을 재시작하여 적용하시겠습니까?`,
+        buttons: ['지금 재시작', '나중에']
+    }).then((result) => {
+        if (result.response === 0) {
+            autoUpdater.quitAndInstall();
+        }
+    });
+});
+
+// ====================================================================
+// 1. 구글 드라이브 API 세팅
 // ====================================================================
 const CLIENT_ID = ''; 
 const CLIENT_SECRET = ''; 
@@ -23,7 +65,7 @@ oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
 const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
 // ====================================================================
-// ★ 메모리 캐시 저장소
+// 메모리 캐시 저장소
 // ====================================================================
 let localCache = {
     departments: [],
@@ -34,7 +76,7 @@ let localCache = {
 };
 
 // ====================================================================
-// ★ 2. 구글 드라이브 조작용 마법 함수들
+// 2. 구글 드라이브 조작용 마법 함수들
 // ====================================================================
 async function getFileOrFolderId(name, parentId, isFolder = false, createIfMissing = false) {
     const mimeQuery = isFolder ? "mimeType='application/vnd.google-apps.folder'" : "mimeType!='application/vnd.google-apps.folder'";
@@ -120,14 +162,13 @@ async function loadEverythingToCache() {
 }
 
 // ====================================================================
-// ★ 🔄 백그라운드 자동 동기화 시스템 (안전 병합 반영)
+// 백그라운드 자동 동기화 시스템
 // ====================================================================
 let autoSyncTimer = null;
 
 function startAutoSync() {
     if (autoSyncTimer) clearInterval(autoSyncTimer);
 
-    // 10초(10000ms)마다 백그라운드에서 조용히 구글 드라이브 변경 사항 감지
     autoSyncTimer = setInterval(async () => {
         if (!localCache.isLoaded) return;
 
@@ -150,7 +191,6 @@ function startAutoSync() {
 
             const validCharts = latestCharts.filter(c => c !== null && c.savedAt);
 
-            // ★ [개선] 로컬 캐시와 드라이브 데이터 병합 (업로드 중인 새 데이터 덮어쓰기 방지)
             const chartMap = new Map();
             localCache.charts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
             validCharts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
@@ -172,7 +212,7 @@ function startAutoSync() {
 }
 
 // ====================================================================
-// ★ 3. 일렉트론(화면) 및 IPC 통신 세팅
+// 3. 일렉트론(화면) 및 IPC 통신 세팅
 // ====================================================================
 
 function createWindow() {
@@ -187,11 +227,10 @@ function createWindow() {
 
   mainWindow.webContents.on('before-input-event', async (event, input) => {
       if (input.key === 'F5' && input.type === 'keyDown') {
-          event.preventDefault(); // 기본 새로고침(하얀 화면) 방지
+          event.preventDefault();
 
           console.log("🔄 F5 새로고침 요청: 드라이브 강제 동기화 시작!");
 
-          // 1. 화면에 즉시 로딩 오버레이 띄우기 (Javascript 주입)
           mainWindow.webContents.executeJavaScript(`
               if (!document.getElementById('f5-sync-overlay')) {
                   const div = document.createElement('div');
@@ -200,14 +239,10 @@ function createWindow() {
                   div.innerHTML = '<div style="margin-bottom:20px; font-size:4em; animation: spin 1s linear infinite;">🔄</div><div style="font-size:1.5em; font-weight:bold;">드라이브 동기화 중...</div><div style="font-size:0.9em; color:#b9bbbe; margin-top:15px;">새로 추가된 데이터를 긁어오고 있습니다. 잠시만 기다려주세요!</div><style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>';
                   document.body.appendChild(div);
               }
-
               true;
           `);
           
-          // 2. 캐시 데이터 다시 긁어오기 (구글 드라이브 통신)
           await loadEverythingToCache();
-          
-          // 3. 완료되면 화면 새로고침
           console.log("✅ 동기화 완료: 화면을 새로고침합니다.");
           mainWindow.reload();
       }
@@ -219,6 +254,9 @@ app.whenReady().then(() => {
         startAutoSync(); 
     });
     createWindow();
+
+    // 앱 준비 완료 후 최신 버전 검사 실행
+    autoUpdater.checkForUpdatesAndNotify();
 });
 
 ipcMain.on('check-cache-status', (event) => {
@@ -272,7 +310,7 @@ ipcMain.on('request-patient-data', (event) => {
     }
 });
 
-// 5. 차팅 저장 (작성자 정보 자동 바인딩 + 캐시 즉시 반영 + 드라이브 백그라운드 업로드)
+// 5. 차팅 저장
 ipcMain.on('save-soap-signed', async (event, payload) => {
     if (currentUserRole === 'viewer') return event.reply('save-failed', '권한이 없습니다.');
     
