@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>차트 작성</title>
     <link rel="stylesheet" href="../assets/style.css">
+
     <style>
         body { 
             display: block !important; margin: 0; padding: 0; 
@@ -25,27 +26,115 @@
 
         .chart-section { -webkit-app-region: no-drag !important; }
 
+        .patient-info { 
+            background: #202225; padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; 
+            display: flex; justify-content: space-between; align-items: center; 
+            border: 1px solid #2f3136; flex-shrink: 0; 
+        }
+        .p-tag { background: #5865f2; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; margin-right: 10px; font-weight: bold; }
+
         .input-scroll-area {
-            flex: 1; overflow-y: auto; padding: 5px 10px 5px 5px; 
+            flex: 1; overflow-y: auto; padding: 0 12px 5px 5px; 
             margin-bottom: 15px; min-height: 0; position: relative; z-index: 10; 
         }
 
-        textarea { 
-            width: 100%; box-sizing: border-box; height: 300px; margin-bottom: 15px; 
-            background: #40444b; border: 1px solid #2f3136; color: white; 
-            padding: 12px; border-radius: 6px; resize: none; font-size: 1em; line-height: 1.4;
-            font-family: 'Segoe UI', sans-serif;
-            position: relative; z-index: 20;
-            -webkit-app-region: no-drag !important;
-            -webkit-user-select: text !important;
-            user-select: text !important;
-            pointer-events: auto !important;
-            cursor: text !important;
+        /* 상단 서식 툴바 */
+        .format-toolbar {
+            position: sticky; top: 0; z-index: 50;
+            background: transparent;
+            padding: 8px 0 8px 0;
+            margin-top: 4px;
+            margin-bottom: 8px;
+            display: flex; flex-direction: row; gap: 6px; align-items: center;
+            border: none; box-shadow: none;
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
         }
-        textarea:focus { outline: 2px solid #5865f2; outline-offset: -2px; background: #40444b; }
+
+        .tool-btn {
+            width: auto !important;
+            flex: 0 0 auto !important;
+            margin: 0 !important;
+            background: #2f3136; color: #b9bbbe; border: 1px solid #40444b;
+            padding: 0 10px !important; border-radius: 4px; cursor: pointer;
+            font-size: 0.82em !important; font-weight: bold; transition: 0.15s;
+            display: inline-flex; align-items: center; justify-content: center;
+            user-select: none; height: 26px !important; box-sizing: border-box;
+            white-space: nowrap;
+        }
+        .tool-btn:hover {
+            background: #5865f2; color: white; border-color: #5865f2;
+        }
+
+        label { color: #b9bbbe; font-weight: bold; margin-bottom: 6px; display: block; font-size: 0.95em; }
+
+        /* 리치 텍스트 에디터 본체 */
+        .rich-editor {
+            width: 100%; box-sizing: border-box; background: #40444b;
+            border: 1px solid #2f3136; color: #ffffff; padding: 12px;
+            border-radius: 6px; font-size: 1em; line-height: 1.6;
+            font-family: 'Segoe UI', sans-serif; overflow-y: auto;
+            margin-bottom: 16px; outline: none; white-space: pre-wrap;
+            word-break: break-word; -webkit-user-select: text !important;
+            user-select: text !important;
+        }
+        .rich-editor:focus { outline: 2px solid #5865f2; }
         
-        label { color: #b9bbbe; font-weight: bold; margin-bottom: 5px; display: block; }
+        .editor-large { height: 300px; }
+        .editor-small { height: 150px; }
+
+        .rich-editor:empty:before {
+            content: attr(data-placeholder);
+            color: #72767d; pointer-events: none; display: block;
+        }
+
+        /* 서식 스타일 */
+        .rich-editor strong, .rich-editor b, .soap-text strong, .soap-text b { color: #ffffff; font-weight: bold; }
+        .rich-editor u, .soap-text u { text-decoration: underline; }
+        .rich-editor em, .rich-editor i, .soap-text em, .soap-text i { font-style: italic; color: #ffffff; }
+        .rich-editor strike, .rich-editor del, .soap-text strike, .soap-text del { text-decoration: line-through; color: #b9bbbe; }
         
+        /* 인라인 코드 */
+        .rich-editor code, .soap-text code {
+            background: #2b2d31 !important;
+            color: #dbdee1 !important;
+            padding: 2px 6px !important;
+            border-radius: 4px !important;
+            font-family: Consolas, 'Courier New', monospace !important;
+            font-size: 0.88em !important;
+        }
+
+        /* 여러 줄 코드 블록 */
+        .rich-editor pre, .soap-text pre {
+            background: #1e1f22 !important;
+            border: 1px solid #111214 !important;
+            border-radius: 5px !important;
+            padding: 10px 14px !important;
+            margin: 8px 0 !important;
+            overflow-x: auto !important;
+            display: block !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .rich-editor pre code, .soap-text pre code {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            color: #dbdee1 !important;
+            font-family: Consolas, 'Courier New', monospace !important;
+            font-size: 0.9em !important;
+            line-height: 1.5 !important;
+            white-space: pre !important;
+            display: block !important;
+        }
+
+        /* 인용구 */
+        .rich-editor blockquote, .soap-text blockquote {
+            border-left: 4px solid #4e5058; margin: 6px 0; padding: 4px 10px;
+            background: rgba(78, 80, 88, 0.15); color: #b9bbbe; border-radius: 0 4px 4px 0;
+        }
+
+        /* 상세 모달창 */
         .modal-overlay { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.7); z-index: 999;
@@ -53,37 +142,27 @@
         }
         .view-box { 
             background: #2f3136; padding: 30px; border-radius: 12px; 
-            border: 1px solid #3ba55c; width: 600px; max-height: 80vh; 
+            border: 1px solid #3ba55c; width: 650px; max-height: 80vh; 
             display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
         }
         .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
         
         .soap-row { margin-bottom: 15px; }
-        .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        .soap-label { color: #b9bbbe; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
         
         .soap-text { 
-            background: #202225; padding: 10px; border-radius: 6px; 
-            color: #dcddde; white-space: pre-wrap; line-height: 1.5; 
-            border: 1px solid #2f3136; font-size: 1em;
+            background: #202225; padding: 14px; border-radius: 6px; 
+            color: #ffffff !important; border: 1px solid #2f3136; font-size: 1em; line-height: 1.6;
+            white-space: pre-wrap !important; word-break: break-word;
             -webkit-user-select: text !important;
         }
 
-        .patient-info { 
-            background: #202225; padding: 20px; border-radius: 8px; margin-bottom: 20px; 
-            display: flex; justify-content: space-between; align-items: center; 
-            border: 1px solid #2f3136; flex-shrink: 0; 
-        }
-        .p-tag { background: #5865f2; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; margin-right: 10px; font-weight: bold; }
-        
         .btn-group { display: flex; gap: 10px; margin-top: auto; flex-shrink: 0; }
-        
         .btn-back { flex: 0.8; background: #2f3136; color: #b9bbbe; border: 1px solid #40444b; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
         .btn-back:hover { background: #ed4245; color: white; border-color: #ed4245; }
-
         .btn-reset { flex: 1; background: #4f545c; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
         .btn-reset:hover { filter: brightness(1.1); transform: translateY(-2px); }
-
         #btn-save-action { flex: 2; background: #5865f2; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
         #btn-save-action:hover { filter: brightness(1.1); transform: translateY(-2px); }
         
@@ -101,7 +180,7 @@
             border-radius: 12px; margin-bottom: 20px; text-align: center; background: #2f3136;
         }
 
-        ::-webkit-scrollbar { width: 8px; background: #2f3136; }
+        ::-webkit-scrollbar { width: 8px; height: 6px; background: #2f3136; }
         ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
     </style>
 </head>
@@ -118,7 +197,7 @@
             </div>
             
             <div class="view-content">
-                <div class="soap-row"><span class="soap-label">Description (설명)</span><div id="v-s" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Subjective (주관적 사실 및 설명)</span><div id="v-s" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Objective (객관적 사실 및 목표)</span><div id="v-o" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
@@ -146,18 +225,29 @@
                 </div>
             </div>
 
+            <!-- 서식 툴바: 코드 단일 버튼 -->
+            <div class="format-toolbar">
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('bold');"><b>B 굵게</b></button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('italic');"><i>I 기울임</i></button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('underline');"><u>U 밑줄</u></button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('strikeThrough');"><s>S 취소선</s></button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyCode();"><code>&lt;&gt; 코드</code></button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyQuote();">❝ 인용구</button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('removeFormat');" style="color:#ed4245;">✕ 제거</button>
+            </div>
+
             <div class="input-scroll-area" id="input-area">
-                <label>Description (설명)</label> 
-                <textarea id="s" placeholder="증상, 문제점, 해야할 일 등 항목에 대한 설명"></textarea>
+                <label>Subjective (주관적 사실 및 설명)</label> 
+                <div id="s" class="rich-editor editor-large" contenteditable="true" data-placeholder="주관적 소견 및 설명 작성"></div>
                 
                 <label>Objective (객관적 사실 및 목표)</label> 
-                <textarea id="o" placeholder="관찰 소견, 객관적 정보, 리스트업"></textarea>
+                <div id="o" class="rich-editor editor-large" contenteditable="true" data-placeholder="관찰 소견, 객관적 정보, 리스트업"></div>
                 
                 <label>Assessment (진단 및 평가)</label> 
-                <textarea id="a" placeholder="문제점 진단, 평가, 진행도"></textarea>
+                <div id="a" class="rich-editor editor-small" contenteditable="true" data-placeholder="문제점 진단, 평가, 진행도"></div>
                 
                 <label>Plan (계획)</label> 
-                <textarea id="p" placeholder="앞으로의 계획"></textarea>
+                <div id="p" class="rich-editor editor-small" contenteditable="true" data-placeholder="앞으로의 계획"></div>
             </div>
 
             <div id="viewer-msg">
@@ -189,7 +279,7 @@
         let doctorList = [];
         let currentPatientInfo = null;
         let myRole = 'doctor'; 
-        let cachedHistoryData = []; // 히스토리 캐시 저장용
+        let cachedHistoryData = [];
 
         window.onload = () => {
             ipcRenderer.send('request-patient-data');
@@ -204,22 +294,79 @@
             }
         }
 
+        function applyFormat(command, value = null) {
+            document.execCommand(command, false, value);
+        }
+
+        // 단일 코드 적용: 여러 줄일 경우 <pre><code> 블록, 한 줄일 경우 <code> 인라인 적용
+        function applyCode() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+            if (range.collapsed) return;
+
+            let parentCode = selection.anchorNode.parentElement.closest('code, pre');
+            if (parentCode) {
+                const text = parentCode.textContent;
+                parentCode.replaceWith(document.createTextNode(text));
+                return;
+            }
+
+            const selectedText = range.toString();
+            if (selectedText.includes('\n')) {
+                const preEl = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                codeEl.appendChild(range.extractContents());
+                preEl.appendChild(codeEl);
+                range.insertNode(preEl);
+                selection.removeAllRanges();
+            } else {
+                const codeEl = document.createElement('code');
+                codeEl.appendChild(range.extractContents());
+                range.insertNode(codeEl);
+                selection.removeAllRanges();
+            }
+        }
+
+        function applyQuote() {
+            document.execCommand('formatBlock', false, 'blockquote');
+        }
+
+        function formatViewerContent(html) {
+            if (!html || html.trim() === '' || html === '-') {
+                return '<span style="color:#72767d;">내용 없음</span>';
+            }
+            return html.replace(/(<pre[\s\S]*?<\/pre>)|(<code>([\s\S]*?)<\/code>)/gi, function(match, preBlock, codeBlock, codeContent) {
+                if (preBlock) return preBlock;
+                if (codeContent && codeContent.includes('\n')) {
+                    return '<pre><code>' + codeContent + '</code></pre>';
+                }
+                return match;
+            });
+        }
+
+        function cleanSummary(text) {
+            if (!text) return '';
+            return text.replace(/<[^>]+>/g, '').trim();
+        }
+
         ipcRenderer.on('init-user-role', (e, role) => {
             myRole = role;
             if (role === 'viewer') {
                 document.getElementById('input-area').style.display = 'none';
+                document.querySelector('.format-toolbar').style.display = 'none';
                 document.getElementById('viewer-msg').style.display = 'flex';
                 document.getElementById('btn-save-action').style.display = 'none';
                 document.getElementById('btn-reset').style.display = 'none';
             } else {
                 document.getElementById('input-area').style.display = 'block';
+                document.querySelector('.format-toolbar').style.display = 'flex';
                 document.getElementById('viewer-msg').style.display = 'none';
                 document.getElementById('btn-save-action').style.display = 'block';
                 document.getElementById('btn-reset').style.display = 'block';
             }
         });
 
-        // 작성자 정보 파싱 공통 함수 (ID, 이름, 전공 매칭)
         function resolveWriterInfo(item) {
             let docId = item.doctorId;
             if (!docId && item.signature) {
@@ -227,7 +374,6 @@
             }
 
             const foundUser = doctorList.find(u => u.id === docId);
-            
             const name = item.doctorName || (foundUser ? foundUser.name : (docId || '알 수 없음'));
             const major = item.doctorMajor || (foundUser ? foundUser.major : '');
             const majorFormatted = major ? `(${major})` : '';
@@ -235,7 +381,6 @@
             return { name, major: majorFormatted };
         }
 
-        // 유저 정보 수신 시 헤더와 히스토리 목록 즉시 재렌더링
         ipcRenderer.on('receive-metadata', (e, data) => {
             if(data.users) { 
                 doctorList = data.users; 
@@ -294,8 +439,8 @@
                 li.className = 'history-item';
                 const dateStr = new Date(item.savedAt).toLocaleString();
                 const sData = item.soapData || {}; 
-                const showA = sData.a || sData.A || '';
-                const showS = sData.s || sData.S || '';
+                const showA = cleanSummary(sData.a || sData.A || '');
+                const showS = cleanSummary(sData.s || sData.S || '');
                 
                 const { name: writerName, major: writerMajor } = resolveWriterInfo(item);
 
@@ -306,7 +451,7 @@
                             ${writerName}<span class="writer-major">${writerMajor}</span>
                         </span>
                     </div>
-                    <div class="history-summary">${showA ? '[Dx] ' + showA : '[Sx] ' + (showS || '내용 없음')}</div>
+                    <div class="history-summary">${showA ? '(Dx) ' + showA : '(Sx) ' + (showS || '내용 없음')}</div>
                 `;
                 li.onclick = () => openView(item);
                 list.appendChild(li);
@@ -320,10 +465,12 @@
 
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             document.getElementById('v-writer').innerText = `${writerName} ${writerMajor}`;
-            document.getElementById('v-s').innerText = data.s || data.S || '-';
-            document.getElementById('v-o').innerText = data.o || data.O || '-';
-            document.getElementById('v-a').innerText = data.a || data.A || '-';
-            document.getElementById('v-p').innerText = data.p || data.P || '-';
+            
+            document.getElementById('v-s').innerHTML = formatViewerContent(data.s || data.S);
+            document.getElementById('v-o').innerHTML = formatViewerContent(data.o || data.O);
+            document.getElementById('v-a').innerHTML = formatViewerContent(data.a || data.A);
+            document.getElementById('v-p').innerHTML = formatViewerContent(data.p || data.P);
+            
             document.getElementById('view-modal').style.display = 'flex';
         }
 
@@ -335,11 +482,11 @@
             if (myRole === 'viewer') return;
             if (!currentViewData) return;
 
-            const data = currentViewData.soapData;
-            document.getElementById('s').value = data.s || data.S || '';
-            document.getElementById('o').value = data.o || data.O || '';
-            document.getElementById('a').value = data.a || data.A || '';
-            document.getElementById('p').value = data.p || data.P || '';
+            const data = currentViewData.soapData || {};
+            document.getElementById('s').innerHTML = data.s || data.S || '';
+            document.getElementById('o').innerHTML = data.o || data.O || '';
+            document.getElementById('a').innerHTML = data.a || data.A || '';
+            document.getElementById('p').innerHTML = data.p || data.P || '';
             
             const btn = document.getElementById('btn-save-action');
             if(btn) {
@@ -352,9 +499,9 @@
         }
 
         function hardResetInputs() {
-            ['s','o','a','p'].forEach(id => {
+            ['s', 'o', 'a', 'p'].forEach(id => {
                 const el = document.getElementById(id);
-                if(el) el.value = '';
+                if (el) el.innerHTML = '';
             });
             
             const btn = document.getElementById('btn-save-action');
@@ -366,11 +513,17 @@
 
         function saveData() {
             if (myRole === 'viewer') return; 
-            const s = document.getElementById('s').value;
-            const o = document.getElementById('o').value;
-            const a = document.getElementById('a').value;
-            const p = document.getElementById('p').value;
-            if(!s && !o && !a && !p) {
+            const s = document.getElementById('s').innerHTML.trim();
+            const o = document.getElementById('o').innerHTML.trim();
+            const a = document.getElementById('a').innerHTML.trim();
+            const p = document.getElementById('p').innerHTML.trim();
+
+            const isAllEmpty = ['s', 'o', 'a', 'p'].every(id => {
+                const el = document.getElementById(id);
+                return !el || el.textContent.trim() === '';
+            });
+
+            if (isAllEmpty) {
                 console.log('내용을 입력해주세요.'); 
                 return;
             }
@@ -406,7 +559,7 @@
         ipcRenderer.on('save-failed', (e, msg) => console.error(msg));
 
         ipcRenderer.on('auto-sync-updated', () => {
-            console.log("⚡ [실시간 감지] 현재 차트 기록을 자동으로 새로고침합니다.");
+            console.log("⚡ 실시간 감지: 현재 차트 기록을 자동으로 새로고침합니다.");
             requestRefresh();
         });
     </script>

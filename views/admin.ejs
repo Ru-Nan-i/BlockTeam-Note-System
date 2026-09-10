@@ -63,18 +63,66 @@
         .badge-patient { background: #3ba55c; } 
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; }
         .alert-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #5865f2; text-align: center; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .view-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #3ba55c; width: 600px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .view-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #3ba55c; width: 650px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
         .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+        
         .soap-row { margin-bottom: 15px; }
-        .soap-label { color: white; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
-        .soap-text { background: #202225; padding: 10px; border-radius: 6px; color: #dcddde; white-space: pre-wrap; line-height: 1.5; border: 1px solid #2f3136; }
+        .soap-label { color: #b9bbbe; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        
+        /* 상세 모달 서식 스타일 */
+        .soap-text { 
+            background: #202225; padding: 14px; border-radius: 6px; 
+            color: #ffffff !important; border: 1px solid #2f3136; font-size: 1em; line-height: 1.6;
+            white-space: pre-wrap !important; word-break: break-word;
+            -webkit-user-select: text !important;
+        }
+        .soap-text strong, .soap-text b { color: #ffffff; font-weight: bold; }
+        .soap-text u { text-decoration: underline; }
+        .soap-text em, .soap-text i { font-style: italic; color: #ffffff; }
+        .soap-text strike, .soap-text del { text-decoration: line-through; color: #b9bbbe; }
+        
+        .soap-text code {
+            background: #2b2d31 !important;
+            color: #dbdee1 !important;
+            padding: 2px 6px !important;
+            border-radius: 4px !important;
+            font-family: Consolas, 'Courier New', monospace !important;
+            font-size: 0.88em !important;
+        }
+        .soap-text pre {
+            background: #1e1f22 !important;
+            border: 1px solid #111214 !important;
+            border-radius: 5px !important;
+            padding: 10px 14px !important;
+            margin: 8px 0 !important;
+            overflow-x: auto !important;
+            display: block !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        .soap-text pre code {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+            color: #dbdee1 !important;
+            font-family: Consolas, 'Courier New', monospace !important;
+            font-size: 0.9em !important;
+            line-height: 1.5 !important;
+            white-space: pre !important;
+            display: block !important;
+        }
+        .soap-text blockquote {
+            border-left: 4px solid #4e5058; margin: 6px 0; padding: 4px 10px;
+            background: rgba(78, 80, 88, 0.15); color: #b9bbbe; border-radius: 0 4px 4px 0;
+        }
+
         .writer-name { color: #ffd700; font-weight: bold; }
         .writer-major { color: #ffd700; font-size: 0.9em; }
         .modal-msg { color: white; font-size: 1.1em; margin-bottom: 20px; line-height: 1.5; }
         .modal-btn-group { display: flex; justify-content: center; gap: 10px; }
         .modal-btn { width: auto; padding: 10px 25px; }
-        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar { width: 8px; height: 6px; }
         ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
         ::-webkit-scrollbar-track { background: #2f3136; }
     </style>
@@ -108,7 +156,7 @@
             </div>
             
             <div class="view-content">
-                <div class="soap-row"><span class="soap-label">Description (설명)</span><div id="v-s" class="soap-text"></div></div>
+                <div class="soap-row"><span class="soap-label">Subjective (주관적 사실 및 설명)</span><div id="v-s" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Objective (객관적 사실 및 목표)</span><div id="v-o" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
@@ -258,6 +306,24 @@
         }
         function closeAlert() { document.getElementById('alert-modal').style.display = 'none'; }
 
+        // HTML 태그를 온전히 렌더링하고 멀티라인 코드를 디스코드 박스로 정돈
+        function formatViewerContent(html) {
+            if (!html || html.trim() === '' || html === '-') {
+                return '<span style="color:#72767d;">내용 없음</span>';
+            }
+            return html.replace(/<code>([\s\S]*?)<\/code>/gi, function(match, content) {
+                if (content.includes('\n')) {
+                    return '<pre><code>' + content + '</code></pre>';
+                }
+                return match;
+            });
+        }
+
+        function cleanSummary(text) {
+            if (!text) return '';
+            return text.replace(/<[^>]+>/g, '').trim();
+        }
+
         function openView(item) {
             const sData = item.soapData || {};
             const writerName = item.doctorName || item.doctorId;
@@ -272,10 +338,11 @@
             document.getElementById('v-writer').innerHTML = `${writerName} <span class="writer-major">${writerMajor}</span>`;
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             
-            document.getElementById('v-s').innerText = sData.s || sData.S || '-';
-            document.getElementById('v-o').innerText = sData.o || sData.O || '-';
-            document.getElementById('v-a').innerText = sData.a || sData.A || '-';
-            document.getElementById('v-p').innerText = sData.p || sData.P || '-';
+            // innerText 대신 formatViewerContent를 통해 HTML 서식 적용
+            document.getElementById('v-s').innerHTML = formatViewerContent(sData.s || sData.S);
+            document.getElementById('v-o').innerHTML = formatViewerContent(sData.o || sData.O);
+            document.getElementById('v-a').innerHTML = formatViewerContent(sData.a || sData.A);
+            document.getElementById('v-p').innerHTML = formatViewerContent(sData.p || sData.P);
             
             document.getElementById('view-modal').style.display = 'flex';
         }
@@ -318,7 +385,7 @@
             showConfirm('정말 삭제하시겠습니까?', () => { ipcRenderer.send('admin-delete-chart', id); });
         }
 
-        // ★ [업그레이드] 글이 끊기지 않고 자연스럽게 다음 장으로 이어지는 PDF (MS Word 방식)
+        // PDF 생성: Subjective 라벨 적용 및 서식(code, pre, blockquote, strong) 지원
         function saveAsPDF(item) {
             const realName = findPatientName(item.patientId, item.patientName);
             const realDept = findDeptName(item.patientId, item.deptName);
@@ -326,7 +393,7 @@
             const writerMajor = item.doctorMajor ? `(${item.doctorMajor})` : '';
             const sData = item.soapData || {};
 
-            const clean = (text) => (!text || text === '-') ? '' : text;
+            const clean = (text) => (!text || text === '-') ? '' : formatViewerContent(text);
             const logoPath = path.join(__dirname, '../assets/logo.png').replace(/\\/g, '/');
 
             const htmlContent = `
@@ -353,6 +420,15 @@
                             min-height: 30px; word-break: break-all; 
                             widows: 2; orphans: 2; 
                         }
+                        .sec-content strong, .sec-content b { font-weight: bold; }
+                        .sec-content u { text-decoration: underline; }
+                        .sec-content em, .sec-content i { font-style: italic; }
+                        .sec-content strike, .sec-content del { text-decoration: line-through; color: #888; }
+                        .sec-content code { background: #eee; padding: 2px 4px; border-radius: 3px; font-family: Consolas, monospace; font-size: 0.9em; }
+                        .sec-content pre { background: #222; color: #eee; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 4px 0; }
+                        .sec-content pre code { background: transparent; color: #eee; padding: 0; }
+                        .sec-content blockquote { border-left: 3px solid #666; margin: 4px 0; padding: 2px 8px; background: #f0f0f0; }
+                        
                         .signature {
                             text-align: right; margin-top: 20px; padding-top: 10px; 
                             border-top: 1px solid #ccc; font-size: 12px; font-weight: bold; 
@@ -385,9 +461,9 @@
                         </tr>
                     </table>
 
-                    <div class="section"><div class="sec-title">Description (설명)</div><div class="sec-content">${clean(sData.s || sData.S)}</div></div>
-                    <div class="section"><div class="sec-title">Objective (객관적 사실)</div><div class="sec-content">${clean(sData.o || sData.O)}</div></div>
-                    <div class="section"><div class="sec-title">Assessment (평가)</div><div class="sec-content">${clean(sData.a || sData.A)}</div></div>
+                    <div class="section"><div class="sec-title">Subjective (주관적 사실 및 설명)</div><div class="sec-content">${clean(sData.s || sData.S)}</div></div>
+                    <div class="section"><div class="sec-title">Objective (객관적 사실 및 목표)</div><div class="sec-content">${clean(sData.o || sData.O)}</div></div>
+                    <div class="section"><div class="sec-title">Assessment (진단 및 평가)</div><div class="sec-content">${clean(sData.a || sData.A)}</div></div>
                     <div class="section"><div class="sec-title">Plan (계획)</div><div class="sec-content">${clean(sData.p || sData.P)}</div></div>
 
                     <div class="signature">
@@ -498,6 +574,8 @@
                 const realDept = findDeptName(c.patientId, c.deptName);
 
                 const itemJson = JSON.stringify(c).replace(/"/g, '&quot;');
+                const sData = c.soapData || {};
+                const showSummary = cleanSummary(sData.a || sData.s || '내용 없음');
 
                 li.innerHTML = `
                     <div style="display:flex; flex-direction:column; gap:8px;">
@@ -519,16 +597,17 @@
                         </div>
 
                         <div style="color:#fff; font-weight:bold; font-size:1em; line-height: 1.4; white-space: normal; word-break: break-all;">
-                            ${c.soapData.a || c.soapData.s || '내용 없음'}
+                            ${showSummary}
                         </div>
                     </div>
                 `;
                 ul.appendChild(li);
             });
         }
+
         ipcRenderer.on('auto-sync-updated', () => {
-        console.log("⚡ [실시간 감지] 새 차트가 들어와 목록을 자동으로 갱신합니다.");
-        refreshAllData(); // 전체 메타데이터 및 차트 목록 새로고침
+            console.log("⚡ [실시간 감지] 새 차트가 들어와 목록을 자동으로 갱신합니다.");
+            refreshAllData();
         });
     </script>
 </body>
