@@ -306,14 +306,14 @@
         }
         function closeAlert() { document.getElementById('alert-modal').style.display = 'none'; }
 
-        // HTML 태그를 온전히 렌더링하고 멀티라인 코드를 디스코드 박스로 정돈
         function formatViewerContent(html) {
             if (!html || html.trim() === '' || html === '-') {
                 return '<span style="color:#72767d;">내용 없음</span>';
             }
-            return html.replace(/<code>([\s\S]*?)<\/code>/gi, function(match, content) {
-                if (content.includes('\n')) {
-                    return '<pre><code>' + content + '</code></pre>';
+            return html.replace(/(<pre[\s\S]*?<\/pre>)|(<code>([\s\S]*?)<\/code>)/gi, function(match, preBlock, codeBlock, codeContent) {
+                if (preBlock) return preBlock;
+                if (codeContent && codeContent.includes('\n')) {
+                    return '<pre><code>' + codeContent + '</code></pre>';
                 }
                 return match;
             });
@@ -338,7 +338,6 @@
             document.getElementById('v-writer').innerHTML = `${writerName} <span class="writer-major">${writerMajor}</span>`;
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             
-            // innerText 대신 formatViewerContent를 통해 HTML 서식 적용
             document.getElementById('v-s').innerHTML = formatViewerContent(sData.s || sData.S);
             document.getElementById('v-o').innerHTML = formatViewerContent(sData.o || sData.O);
             document.getElementById('v-a').innerHTML = formatViewerContent(sData.a || sData.A);
@@ -385,7 +384,7 @@
             showConfirm('정말 삭제하시겠습니까?', () => { ipcRenderer.send('admin-delete-chart', id); });
         }
 
-        // PDF 생성: Subjective 라벨 적용 및 서식(code, pre, blockquote, strong) 지원
+        // PDF 생성 (파란색 선 제거, 기존 흑백 제목 선 복원, 단정한 라이트 그레이 코드 블록)
         function saveAsPDF(item) {
             const realName = findPatientName(item.patientId, item.patientName);
             const realDept = findDeptName(item.patientId, item.deptName);
@@ -408,7 +407,9 @@
                         table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 11px; }
                         td { border: 1px solid #999; padding: 6px; }
                         .td-label { background: #f0f0f0; font-weight: bold; width: 90px; text-align: center; }
+                        
                         .section { margin-bottom: 20px; font-size: 11px; } 
+                        /* 기존의 단정한 흑색(#333) 좌측 라인으로 복원 */
                         .sec-title { 
                             font-size: 12px; font-weight: bold; margin-bottom: 4px; 
                             border-left: 4px solid #333; padding-left: 8px; color: #333; 
@@ -424,10 +425,49 @@
                         .sec-content u { text-decoration: underline; }
                         .sec-content em, .sec-content i { font-style: italic; }
                         .sec-content strike, .sec-content del { text-decoration: line-through; color: #888; }
-                        .sec-content code { background: #eee; padding: 2px 4px; border-radius: 3px; font-family: Consolas, monospace; font-size: 0.9em; }
-                        .sec-content pre { background: #222; color: #eee; padding: 8px; border-radius: 4px; overflow-x: auto; margin: 4px 0; }
-                        .sec-content pre code { background: transparent; color: #eee; padding: 0; }
-                        .sec-content blockquote { border-left: 3px solid #666; margin: 4px 0; padding: 2px 8px; background: #f0f0f0; }
+                        
+                        /* 인라인 코드 */
+                        .sec-content code { 
+                            background: #f6f8fa; 
+                            color: #24292f; 
+                            padding: 2px 5px; 
+                            border-radius: 4px; 
+                            border: 1px solid #d0d7de; 
+                            font-family: Consolas, 'Courier New', monospace; 
+                            font-size: 10px; 
+                        }
+
+                        /* 파란 선을 제거하고 은은한 단일 테두리(#d0d7de)만 적용한 코드 블록 */
+                        .sec-content pre { 
+                            background: #f6f8fa; 
+                            border: 1px solid #d0d7de; 
+                            border-radius: 5px; 
+                            padding: 10px 14px; 
+                            margin: 8px 0; 
+                            overflow-x: hidden; 
+                            box-sizing: border-box; 
+                        }
+                        .sec-content pre code { 
+                            background: transparent; 
+                            border: none; 
+                            color: #24292f; 
+                            padding: 0; 
+                            font-family: Consolas, 'Courier New', monospace; 
+                            font-size: 10px; 
+                            line-height: 1.55; 
+                            white-space: pre-wrap; 
+                            word-break: break-all; 
+                            display: block; 
+                        }
+
+                        /* 인용구 */
+                        .sec-content blockquote { 
+                            border-left: 3px solid #666; 
+                            margin: 4px 0; 
+                            padding: 3px 10px; 
+                            background: #f0f0f0; 
+                            color: #555; 
+                        }
                         
                         .signature {
                             text-align: right; margin-top: 20px; padding-top: 10px; 
