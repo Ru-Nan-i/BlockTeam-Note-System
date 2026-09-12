@@ -1,6 +1,6 @@
 {
   "name": "blockteam-note-data",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "BlockTeam Note Data Application",
   "main": "main.js",
   "author": "BlockTeam",
@@ -23,6 +23,7 @@
   "build": {
     "appId": "com.blockteam.his",
     "productName": "BlockTeam Note Data",
+    "artifactName": "BlockTeam-Note-System-Setup-${version}.${ext}",
     "directories": {
       "output": "dist"
     },
