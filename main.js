@@ -2,44 +2,182 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 const fs = require('fs');
-const { google } = require('googleapis');
-const { Readable } = require('stream');
 require('ejs-electron');
 
 let mainWindow;
+let sessionToken = null; // ★ 로그인 성공 시 GAS로부터 발급받는 동적 세션 토큰
 let currentDoctorId = null;
 let currentPatient = null;
 let currentUserRole = 'doctor';
 
 // ====================================================================
-// ★ 자동 업데이트(electron-updater) 설정
+// ★ 1. Google Apps Script(GAS) 웹앱 URL (마스터 키 없음)
+// ====================================================================
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzUdgKU12V2DEfWtduHHF-N_czYWR38CQetBh0sxXGI7R96OLZh2f962MUS1TSvFjMHsQ/exec';
+
+// ====================================================================
+// ★ 2. 메모리 캐시 저장소
+// ====================================================================
+let localCache = {
+    departments: [],
+    users: [],
+    patients: [],
+    charts: [],
+    isLoaded: false
+};
+
+// ====================================================================
+// ★ 3. GAS 통신용 헬퍼 함수 (동적 세션 토큰 전송)
+// ====================================================================
+async function requestGAS(action, payload = {}) {
+    try {
+        const bodyData = {
+            action,
+            token: sessionToken, // 로그인 시 발급받은 일회성 토큰 동봉
+            ...payload
+        };
+
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(bodyData)
+        });
+
+        const text = await response.text();
+
+        console.log(`📡 GAS 응답 [${action}] | 상태: ${response.status} | 길이: ${text.length}`);
+
+        if (!text || !text.trim()) {
+            console.error(`❌ GAS가 빈 응답을 반환했습니다. [${action}]`);
+            return {
+                success: false,
+                message: `GAS 빈 응답 (HTTP ${response.status})`
+            };
+        }
+
+        try {
+            const result = JSON.parse(text);
+
+            if (!response.ok || result.success === false) {
+                console.error(`❌ GAS 작업 실패 [${action}]:`, result.message);
+            }
+
+            // 세션 만료 시 로그인 화면으로 강제 전환
+            if (result && result.code === 'UNAUTHORIZED' && action !== 'login') {
+                console.warn("⚠️ 세션이 만료되어 로그인 화면으로 이동합니다.");
+                sessionToken = null;
+                localCache.isLoaded = false;
+                if (autoSyncTimer) clearInterval(autoSyncTimer);
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
+                }
+            }
+
+            return result;
+
+        } catch (jsonError) {
+            console.error(`❌ GAS 응답 JSON 파싱 실패 [${action}] / 원본: ${text}`);
+            return {
+                success: false,
+                message: `GAS가 JSON이 아닌 응답을 반환했습니다. HTTP ${response.status}`,
+                rawResponse: text
+            };
+        }
+
+    } catch (error) {
+        console.error(`❌ GAS 통신 에러 (${action}):`, error);
+        return {
+            success: false,
+            message: error.message || '서버 통신 실패'
+        };
+    }
+}
+
+// ====================================================================
+// ★ 4. 초기 데이터 로드 (로그인 후 호출됨)
+// ====================================================================
+async function loadEverythingToCache() {
+    console.log("📥 GAS를 통해 드라이브에서 전체 데이터를 불러옵니다...");
+
+    const result = await requestGAS('loadAll');
+
+    if (result.success && result.data) {
+        localCache.departments = result.data.departments || [];
+        localCache.users = result.data.users || [];
+        localCache.patients = result.data.patients || [];
+        localCache.charts = result.data.charts || [];
+        localCache.isLoaded = true;
+
+        console.log("⚡ 캐싱 완료! 모든 조회가 즉시 처리됩니다.");
+        console.log(`   부서: ${localCache.departments.length}개 | 유저: ${localCache.users.length}명 | 항목: ${localCache.patients.length}개 | 차트: ${localCache.charts.length}개`);
+
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('cache-loaded');
+        }
+
+    } else {
+        console.error("데이터 로드 실패:", result ? result.message : '응답 없음');
+    }
+}
+
+// ====================================================================
+// ★ 5. 백그라운드 자동 동기화 (10초 주기)
+// ====================================================================
+let autoSyncTimer = null;
+
+function startAutoSync() {
+    if (autoSyncTimer) clearInterval(autoSyncTimer);
+
+    autoSyncTimer = setInterval(async () => {
+        if (!sessionToken || !localCache.isLoaded) return;
+
+        try {
+            const result = await requestGAS('syncCharts');
+
+            if (result.success && result.data) {
+                const latestCharts = result.data;
+                const chartMap = new Map();
+
+                localCache.charts.forEach(c => {
+                    if (c && c.id) chartMap.set(String(c.id), c);
+                });
+
+                latestCharts.forEach(c => {
+                    if (c && c.id) chartMap.set(String(c.id), c);
+                });
+
+                const mergedCharts = Array.from(chartMap.values());
+
+                if (mergedCharts.length !== localCache.charts.length) {
+                    console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 동기화되었습니다!");
+                    localCache.charts = mergedCharts;
+
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('auto-sync-updated');
+                    }
+                }
+            }
+
+        } catch (err) {
+            console.log("백그라운드 동기화 대기 중...");
+        }
+
+    }, 10000);
+}
+
+// ====================================================================
+// ★ 6. 자동 업데이트 설정
 // ====================================================================
 if (!app.isPackaged) {
-    // 개발 모드(npm start)에서 dev-app-update.yml을 참조해 테스트할 때 사용
     autoUpdater.updateConfigPath = path.join(__dirname, 'dev-app-update.yml');
 }
 
-autoUpdater.autoDownload = true; // 새 버전 발견 시 백그라운드 자동 다운로드
-autoUpdater.autoInstallOnAppQuit = true; // 앱 종료 시 자동 설치
-
-autoUpdater.on('checking-for-update', () => {
-    console.log('🔄 [업데이트] GitHub Releases 최신 버전 검사 중...');
-});
-
-autoUpdater.on('update-available', (info) => {
-    console.log(`✨ [업데이트] 새 버전 발견: v${info.version}`);
-});
-
-autoUpdater.on('update-not-available', () => {
-    console.log('✅ [업데이트] 현재 최신 버전을 사용 중입니다.');
-});
-
-autoUpdater.on('error', (err) => {
-    console.error('❌ [업데이트 오류]:', err);
-});
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on('update-downloaded', (info) => {
-    console.log(`📥 [업데이트] v${info.version} 다운로드 완료.`);
     dialog.showMessageBox({
         type: 'info',
         title: '업데이트 설치 알림',
@@ -53,256 +191,112 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 // ====================================================================
-// 1. 구글 드라이브 API 세팅
+// ★ 7. 일렉트론 윈도우 생성
 // ====================================================================
-const CLIENT_ID = ''; 
-const CLIENT_SECRET = ''; 
-const REFRESH_TOKEN = '';
-const STORAGE_DB_ID = '';
-
-const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, "https://developers.google.com/oauthplayground");
-oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
-const drive = google.drive({ version: 'v3', auth: oauth2Client });
-
-// ====================================================================
-// 메모리 캐시 저장소
-// ====================================================================
-let localCache = {
-    departments: [],
-    users: [],
-    patients: [],
-    charts: [],
-    isLoaded: false 
-};
-
-// ====================================================================
-// 2. 구글 드라이브 조작용 마법 함수들
-// ====================================================================
-async function getFileOrFolderId(name, parentId, isFolder = false, createIfMissing = false) {
-    const mimeQuery = isFolder ? "mimeType='application/vnd.google-apps.folder'" : "mimeType!='application/vnd.google-apps.folder'";
-    const q = `${mimeQuery} and name='${name}' and '${parentId}' in parents and trashed=false`;
-    try {
-        const res = await drive.files.list({ q, fields: 'files(id, name)', spaces: 'drive' });
-        if (res.data.files.length > 0) return res.data.files[0].id;
-        if (createIfMissing && isFolder) {
-            const createRes = await drive.files.create({
-                resource: { name, mimeType: 'application/vnd.google-apps.folder', parents: [parentId] },
-                fields: 'id'
-            });
-            return createRes.data.id;
-        }
-        return null;
-    } catch (e) { return null; }
-}
-
-async function readJsonFromDrive(fileId, fallback = null) {
-    if (!fileId) return fallback;
-    try {
-        const res = await drive.files.get({ fileId: fileId, alt: 'media' });
-        if (typeof res.data === 'string') return JSON.parse(res.data);
-        else if (typeof res.data === 'object') return res.data;
-        return fallback;
-    } catch (e) { return fallback; }
-}
-
-async function saveJsonToDrive(fileName, parentId, data) {
-    const existingId = await getFileOrFolderId(fileName, parentId, false);
-    const media = { mimeType: 'application/json', body: Readable.from(JSON.stringify(data, null, 2)) };
-    if (existingId) {
-        await drive.files.update({ fileId: existingId, media });
-    } else {
-        await drive.files.create({ resource: { name: fileName, parents: [parentId] }, media });
-    }
-}
-
-async function getAllJsonInFolder(folderId) {
-    if (!folderId) return [];
-    try {
-        const res = await drive.files.list({ q: `'${folderId}' in parents and trashed=false`, fields: 'files(id, name)' });
-        const promises = res.data.files.filter(f => f.name.endsWith('.json')).map(f => readJsonFromDrive(f.id));
-        const results = await Promise.all(promises);
-        return results.filter(r => r !== null);
-    } catch (e) { return []; }
-}
-
-async function loadEverythingToCache() {
-    console.log("📥 드라이브에서 전체 데이터를 불러옵니다...");
-    
-    const deptId = await getFileOrFolderId('departments.json', STORAGE_DB_ID);
-    const usersId = await getFileOrFolderId('users.json', STORAGE_DB_ID);
-    const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, true);
-    const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, true);
-
-    const [departments, users, patients, chartFolders] = await Promise.all([
-        readJsonFromDrive(deptId, []),
-        readJsonFromDrive(usersId, []),
-        getAllJsonInFolder(patientsFolderId),
-        drive.files.list({ q: `'${chartsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`, fields: 'files(id)' })
-    ]);
-
-    let allCharts = [];
-    if (chartFolders.data && chartFolders.data.files) {
-        for (const folder of chartFolders.data.files) {
-            const chartsInDept = await getAllJsonInFolder(folder.id);
-            allCharts = allCharts.concat(chartsInDept);
-        }
-    }
-
-    localCache.departments = departments || [];
-    localCache.users = users || [];
-    localCache.patients = patients || [];
-    localCache.charts = allCharts.filter(c => c !== null && c.savedAt); 
-    localCache.isLoaded = true;
-
-    console.log("⚡ 캐싱 완료! 이제부터 모든 로딩이 즉시 처리됩니다.");
-    
-    if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('cache-loaded');
-    }
-}
-
-// ====================================================================
-// 백그라운드 자동 동기화 시스템
-// ====================================================================
-let autoSyncTimer = null;
-
-function startAutoSync() {
-    if (autoSyncTimer) clearInterval(autoSyncTimer);
-
-    autoSyncTimer = setInterval(async () => {
-        if (!localCache.isLoaded) return;
-
-        try {
-            const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, false);
-            if (!chartsFolderId) return;
-
-            const chartFolders = await drive.files.list({
-                q: `'${chartsFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-                fields: 'files(id)'
-            });
-
-            let latestCharts = [];
-            if (chartFolders.data && chartFolders.data.files) {
-                for (const folder of chartFolders.data.files) {
-                    const chartsInDept = await getAllJsonInFolder(folder.id);
-                    latestCharts = latestCharts.concat(chartsInDept);
-                }
-            }
-
-            const validCharts = latestCharts.filter(c => c !== null && c.savedAt);
-
-            const chartMap = new Map();
-            localCache.charts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
-            validCharts.forEach(c => { if (c && c.id) chartMap.set(String(c.id), c); });
-
-            const mergedCharts = Array.from(chartMap.values());
-
-            if (mergedCharts.length !== localCache.charts.length) {
-                console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 구글 드라이브에서 발견되었습니다!");
-                localCache.charts = mergedCharts;
-
-                if (mainWindow && !mainWindow.isDestroyed()) {
-                    mainWindow.webContents.send('auto-sync-updated');
-                }
-            }
-        } catch (err) {
-            console.log("백그라운드 동기화 대기 중...");
-        }
-    }, 10000);
-}
-
-// ====================================================================
-// 3. 일렉트론(화면) 및 IPC 통신 세팅
-// ====================================================================
-
 function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1440, height: 1080,
-    webPreferences: { nodeIntegration: true, contextIsolation: false },
-    title: "BlockTeam HIS",
-    backgroundColor: '#2f3136',
-    icon: path.join(__dirname, 'assets', 'icon.png') 
-  });
-  mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
+    mainWindow = new BrowserWindow({
+        width: 1440,
+        height: 1080,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            sandbox: false,
+            preload: path.join(__dirname, 'preload.js')
+        },
+        title: "BlockTeam HIS",
+        backgroundColor: '#2f3136',
+        icon: path.join(__dirname, 'assets', 'icon.png')
+    });
 
-  mainWindow.webContents.on('before-input-event', async (event, input) => {
-      if (input.key === 'F5' && input.type === 'keyDown') {
-          event.preventDefault();
+    mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
 
-          console.log("🔄 F5 새로고침 요청: 드라이브 강제 동기화 시작!");
+    mainWindow.webContents.once('did-finish-load', () => {
+        // 로그인 화면이 즉시 열리도록 준비 신호 전송
+        mainWindow.webContents.send('cache-loaded');
+    });
 
-          mainWindow.webContents.executeJavaScript(`
-              if (!document.getElementById('f5-sync-overlay')) {
-                  const div = document.createElement('div');
-                  div.id = 'f5-sync-overlay';
-                  div.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(47,49,54,0.85); z-index:999999; display:flex; flex-direction:column; justify-content:center; align-items:center; color:white; font-family: sans-serif; backdrop-filter: blur(5px);';
-                  div.innerHTML = '<div style="margin-bottom:20px; font-size:4em; animation: spin 1s linear infinite;">🔄</div><div style="font-size:1.5em; font-weight:bold;">드라이브 동기화 중...</div><div style="font-size:0.9em; color:#b9bbbe; margin-top:15px;">새로 추가된 데이터를 긁어오고 있습니다. 잠시만 기다려주세요!</div><style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>';
-                  document.body.appendChild(div);
-              }
-              true;
-          `);
-          
-          await loadEverythingToCache();
-          console.log("✅ 동기화 완료: 화면을 새로고침합니다.");
-          mainWindow.reload();
-      }
-  });
+    mainWindow.webContents.on('before-input-event', async (event, input) => {
+        if (input.key === 'F5' && input.type === 'keyDown') {
+            event.preventDefault();
+            if (sessionToken) {
+                console.log("🔄 F5 새로고침 요청: 드라이브 강제 동기화 시작!");
+                await loadEverythingToCache();
+            }
+            mainWindow.reload();
+        }
+    });
 }
 
+// ====================================================================
+// ★ 8. 앱 시작
+// ====================================================================
 app.whenReady().then(() => {
-    loadEverythingToCache().then(() => {
-        startAutoSync(); 
-    });
     createWindow();
-
-    // 앱 준비 완료 후 최신 버전 검사 실행
     autoUpdater.checkForUpdatesAndNotify();
 });
 
+// ====================================================================
+// ★ 9. IPC 통신 처리
+// ====================================================================
 ipcMain.on('check-cache-status', (event) => {
-    if (localCache.isLoaded) {
-        event.reply('cache-loaded');
-    }
+    event.reply('cache-loaded');
 });
 
-// 1. 로그인 
+// 로그인 (GAS 서버 직접 인증 및 토큰 발급)
 ipcMain.on('request-login', async (event, creds) => {
-    if (!localCache.isLoaded) {
-        return event.reply('login-failed', '데이터 초기화 중입니다. 잠시 후 다시 시도해주세요.');
+    if (!creds || !creds.id || !creds.password) {
+        return event.reply('login-failed', '아이디와 비밀번호를 입력해주세요.');
     }
 
-    const user = localCache.users.find(u => u.id === creds.id && u.pw === creds.password);
-    
-    if (user || creds.id === 'admin') {
-        currentDoctorId = creds.id;
-        currentUserRole = user ? user.role : 'admin';
+    console.log(`🔐 [로그인 시도] ID: ${creds.id}`);
+    const result = await requestGAS('login', {
+        id: creds.id,
+        password: creds.password
+    });
+
+    if (result && result.success && result.token) {
+        sessionToken = result.token;
+        currentDoctorId = result.user.id;
+        currentUserRole = result.user.role || 'doctor';
+
+        console.log(`✅ 로그인 성공: ${result.user.name}(${result.user.id}) [${currentUserRole}]`);
+
+        // 1. 전체 데이터 캐시 로드
+        await loadEverythingToCache();
+
+        // 2. 백그라운드 실시간 동기화 개시
+        startAutoSync();
+
+        // 3. 페이지 이동
         const targetPage = currentUserRole === 'admin' ? 'admin.ejs' : 'selection.ejs';
         mainWindow.loadURL('file://' + __dirname + '/views/' + targetPage);
     } else {
-        event.reply('login-failed', '계정 정보가 틀렸습니다.');
+        console.warn(`❌ 로그인 실패: ${result ? result.message : '서버 무응답'}`);
+        event.reply('login-failed', result && result.message ? result.message : '계정 정보가 일치하지 않습니다.');
     }
 });
 
-// 2. 메타데이터 요청
+// 메타데이터 요청
 ipcMain.on('request-metadata', (event) => {
-    event.reply('receive-metadata', { 
-        patients: localCache.patients, 
-        departments: localCache.departments, 
-        users: localCache.users 
+    event.reply('receive-metadata', {
+        patients: localCache.patients,
+        departments: localCache.departments,
+        users: localCache.users
     });
 });
 
-// 3. 선택
+// 환자 선택
 ipcMain.on('patient-selected', (event, patient) => {
     currentPatient = patient;
     mainWindow.loadURL('file://' + __dirname + '/views/index.ejs');
+
     mainWindow.webContents.once('did-finish-load', () => {
         mainWindow.webContents.send('init-patient-data', currentPatient);
         mainWindow.webContents.send('init-user-role', currentUserRole);
     });
 });
 
-// 4. 새로고침
+// 데이터 리로드
 ipcMain.on('request-patient-data', (event) => {
     if (currentPatient) {
         event.reply('init-patient-data', currentPatient);
@@ -310,10 +304,23 @@ ipcMain.on('request-patient-data', (event) => {
     }
 });
 
-// 5. 차팅 저장
+// 차트 기록 불러오기
+ipcMain.on('request-history', (event, patientId) => {
+    const pid = patientId || (currentPatient ? currentPatient.id : null);
+    if (!pid) return;
+
+    const history = localCache.charts.filter(c => c.patientId === pid);
+    history.sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
+
+    event.reply('load-history', history);
+});
+
+// 차팅 저장
 ipcMain.on('save-soap-signed', async (event, payload) => {
-    if (currentUserRole === 'viewer') return event.reply('save-failed', '권한이 없습니다.');
-    
+    if (currentUserRole === 'viewer') {
+        return event.reply('save-failed', '작성 권한이 없습니다.');
+    }
+
     const timestamp = Date.now();
     const docUser = localCache.users.find(u => u.id === currentDoctorId);
 
@@ -329,77 +336,60 @@ ipcMain.on('save-soap-signed', async (event, payload) => {
     };
 
     localCache.charts.push(requestData);
-    event.reply('save-success', { msg: `✅ 저장 완료!`, savedItem: requestData });
 
-    try {
-        const dept = localCache.departments.find(d => d.id === currentPatient.deptId);
-        const deptName = dept ? `${dept.name}(${dept.id})` : `미분류(${currentPatient.deptId})`;
+    event.reply('save-success', {
+        msg: `✅ 저장 완료!`,
+        savedItem: requestData
+    });
 
-        const chartsFolderId = await getFileOrFolderId('콘텐츠 차트', STORAGE_DB_ID, true, true);
-        const targetDeptFolderId = await getFileOrFolderId(deptName, chartsFolderId, true, true);
+    const dept = localCache.departments.find(d => d.id === currentPatient.deptId);
+    const deptName = dept ? `${dept.name}(${dept.id})` : `미분류(${currentPatient.deptId})`;
+    const safeName = currentPatient.name.replace(/[\\/:*?"<>|]/g, "");
+    const fileName = `${safeName}(${currentPatient.id})_${timestamp}.json`;
 
-        const safeName = currentPatient.name.replace(/[\\/:*?"<>|]/g, "");
-        const fileName = `${safeName}(${currentPatient.id})_${timestamp}.json`;
-
-        await saveJsonToDrive(fileName, targetDeptFolderId, requestData);
-    } catch (error) { console.error(error); }
+    requestGAS('saveChart', {
+        fileName,
+        deptName,
+        chartData: requestData
+    });
 });
 
-// 6. 개인 기록 불러오기
-ipcMain.on('request-history', (event, patientId) => {
-    const pid = patientId || (currentPatient ? currentPatient.id : null);
-    if (!pid) return;
-    
-    const history = localCache.charts.filter(c => c.patientId === pid);
-    history.sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
-    
-    event.reply('load-history', history);
+// 관리자: 부서 추가
+ipcMain.on('admin-add-dept', async (e, d) => {
+    localCache.departments.push(d);
+    e.reply('action-result', '콘텐츠 추가 완료');
+    requestGAS('addDept', { departments: localCache.departments });
 });
 
-// 7. 관리자: 콘텐츠/항목/유저 추가
-ipcMain.on('admin-add-dept', async (e, d) => { 
-    localCache.departments.push(d); 
-    e.reply('action-result','콘텐츠 추가 완료'); 
-    await saveJsonToDrive('departments.json', STORAGE_DB_ID, localCache.departments);
+// 관리자: 환자 추가
+ipcMain.on('admin-add-patient', async (e, d) => {
+    localCache.patients.push(d);
+    e.reply('action-result', '항목 생성 완료');
+    requestGAS('addPatient', { patientData: d });
 });
 
-ipcMain.on('admin-add-patient', async (e, d) => { 
-    localCache.patients.push(d); 
-    e.reply('action-result','항목 생성 완료'); 
-    const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, true);
-    await saveJsonToDrive(`${d.id}.json`, patientsFolderId, d);
+// 관리자: 유저 추가
+ipcMain.on('admin-add-user', async (e, d) => {
+    localCache.users.push(d);
+    e.reply('action-result', '계정 생성 완료');
+    requestGAS('addUser', { users: localCache.users });
 });
 
-ipcMain.on('admin-add-user', async (e, d) => { 
-    localCache.users.push(d); 
-    e.reply('action-result','계정 생성 완료'); 
-    await saveJsonToDrive('users.json', STORAGE_DB_ID, localCache.users);
-});
-
-// 8. 관리자: 전체 차트 불러오기
-ipcMain.on('admin-get-charts', (e) => { 
+// 관리자: 전체 차트 불러오기
+ipcMain.on('admin-get-charts', (e) => {
     let allCharts = [...localCache.charts];
     allCharts.sort((a, b) => new Date(a.savedAt) - new Date(b.savedAt));
     e.reply('admin-charts-data', allCharts);
 });
 
-// 9. 관리자: 차트 삭제
-ipcMain.on('admin-delete-chart', async (e, id) => { 
+// 관리자: 차트 삭제
+ipcMain.on('admin-delete-chart', async (e, id) => {
     localCache.charts = localCache.charts.filter(c => c.id !== id);
     e.reply('action-result', '삭제 완료 (클라우드 동기화 중...)');
-
-    try {
-        const q = `name contains '_${id}.json' and trashed=false`;
-        const res = await drive.files.list({ q, fields: 'files(id)' });
-        if (res.data.files.length > 0) {
-            for (const file of res.data.files) {
-                await drive.files.update({ fileId: file.id, resource: { trashed: true } });
-            }
-        }
-    } catch (error) { console.error(error); }
+    requestGAS('deleteChart', { chartId: id });
 });
 
-// 10. 관리자: 담당 변경
+// 관리자: 담당 변경
 ipcMain.on('admin-update-patient', async (e, data) => {
     const pIndex = localCache.patients.findIndex(p => p.id === data.id);
     if (pIndex > -1) {
@@ -408,17 +398,19 @@ ipcMain.on('admin-update-patient', async (e, data) => {
 
     if (currentPatient && currentPatient.id === data.id) {
         currentPatient.inChargeId = localCache.patients[pIndex].inChargeId;
-        if (mainWindow) mainWindow.webContents.send('init-patient-data', currentPatient);
+        if (mainWindow) {
+            mainWindow.webContents.send('init-patient-data', currentPatient);
+        }
     }
+
     e.reply('action-result', '담당 변경 완료 (클라우드 동기화 중...)');
 
-    try {
-        const patientsFolderId = await getFileOrFolderId('항목 정보', STORAGE_DB_ID, true, false);
-        await saveJsonToDrive(`${data.id}.json`, patientsFolderId, localCache.patients[pIndex]);
-    } catch (err) { console.error(err); }
+    if (pIndex > -1) {
+        requestGAS('updatePatient', { patientData: localCache.patients[pIndex] });
+    }
 });
 
-// 11. 관리자: PDF 생성 
+// PDF 생성 로직
 ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
     try {
         const { filePath } = await dialog.showSaveDialog({
@@ -431,12 +423,15 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
 
         let printWindow = new BrowserWindow({
             show: false,
-            webPreferences: { nodeIntegration: true, contextIsolation: false }
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false
+            }
         });
 
         const tempHtmlPath = path.join(app.getPath('temp'), 'temp_pdf.html');
         fs.writeFileSync(tempHtmlPath, html, 'utf8');
-        
+
         await printWindow.loadURL(`file://${tempHtmlPath}`);
 
         try {
@@ -444,17 +439,14 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
                 printBackground: true,
                 pageSize: 'A4'
             });
-            
             fs.writeFileSync(filePath, pdfBuffer);
             printWindow.close();
-            event.reply('action-result', `✅ PDF가 성공적으로 저장되었습니다!`);
-        } catch(e) {
-            console.error(e);
-            event.reply('action-result', '❌ PDF를 굽는 중 오류가 발생했습니다.');
+        } catch (pdfErr) {
+            console.error('PDF 변환 오류:', pdfErr);
             printWindow.close();
         }
 
-    } catch (error) {
-        event.reply('action-result', '❌ PDF 생성 창을 여는 중 오류가 발생했습니다.');
+    } catch (err) {
+        console.error('PDF 저장 대화상자 오류:', err);
     }
 });
