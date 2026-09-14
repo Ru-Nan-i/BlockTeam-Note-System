@@ -2,6 +2,8 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <!-- ★ CSP 메타 태그: 인라인/악성 스크립트 실행 방지 -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
     <title>차트 작성</title>
     <link rel="stylesheet" href="../assets/style.css">
 
@@ -225,7 +227,6 @@
                 </div>
             </div>
 
-            <!-- 서식 툴바: 코드 단일 버튼 -->
             <div class="format-toolbar">
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('bold');"><b>B 굵게</b></button>
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('italic');"><i>I 기울임</i></button>
@@ -233,7 +234,7 @@
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('strikeThrough');"><s>S 취소선</s></button>
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyCode();"><code>&lt;&gt; 코드</code></button>
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyQuote();">❝ 인용구</button>
-                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('removeFormat');" style="color:#ed4245;">✕ 제거</button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); removeAllFormat();" style="color:#ed4245;">✕ 제거</button>
             </div>
 
             <div class="input-scroll-area" id="input-area">
@@ -273,8 +274,6 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
-
         let currentViewData = null; 
         let doctorList = [];
         let currentPatientInfo = null;
@@ -282,8 +281,8 @@
         let cachedHistoryData = [];
 
         window.onload = () => {
-            ipcRenderer.send('request-patient-data');
-            ipcRenderer.send('request-metadata');
+            window.electronAPI.send('request-patient-data');
+            window.electronAPI.send('request-metadata');
         };
 
         function goBack() {
@@ -294,18 +293,109 @@
             }
         }
 
+        // ============================================================
+        // ★ XSS 방어: 허용된 서식 태그 외의 모든 태그 및 인라인 이벤트/속성 제거
+        // ============================================================
+        function sanitizeHTML(dirty) {
+            if (!dirty) return '';
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(dirty, 'text/html');
+            
+            const allowedTags = new Set([
+                'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'DEL', 
+                'PRE', 'CODE', 'BLOCKQUOTE', 'BR', 'P', 'DIV', 'SPAN'
+            ]);
+
+            function cleanNode(node) {
+                const children = Array.from(node.childNodes);
+                for (const child of children) {
+                    if (child.nodeType === Node.ELEMENT_NODE) {
+                        if (!allowedTags.has(child.tagName)) {
+                            // script, img, iframe 등 미허용 태그는 텍스트만 보존하고 태그는 소멸
+                            const textNode = document.createTextNode(child.textContent);
+                            child.replaceWith(textNode);
+                        } else {
+                            // onerror, onclick, style 등 모든 위험 속성 일괄 박멸
+                            while (child.attributes.length > 0) {
+                                child.removeAttribute(child.attributes[0].name);
+                            }
+                            cleanNode(child);
+                        }
+                    }
+                }
+            }
+
+            cleanNode(doc.body);
+            return doc.body.innerHTML;
+        }
+
         function applyFormat(command, value = null) {
             document.execCommand(command, false, value);
         }
 
-        // 단일 코드 적용: 여러 줄일 경우 <pre><code> 블록, 한 줄일 경우 <code> 인라인 적용
+        // DOM 언랩 헬퍼 (인용구 태그만 깔끔하게 제거하고 내부 내용은 보존)
+        function unwrapBlockquote(bq) {
+            if (!bq || !bq.parentNode) return;
+            const parent = bq.parentNode;
+            while (bq.firstChild) {
+                parent.insertBefore(bq.firstChild, bq);
+            }
+            parent.removeChild(bq);
+        }
+
+        // 인용구 토글 적용/해제
+        function applyQuote() {
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+            
+            let node = selection.anchorNode;
+            let el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+            let bq = el ? el.closest('blockquote') : null;
+
+            if (bq) {
+                unwrapBlockquote(bq);
+            } else {
+                document.execCommand('formatBlock', false, 'blockquote');
+            }
+        }
+
+        // 서식 전체 제거 (인라인 서식 + 인용구 + 코드 블록 동시 해제)
+        function removeAllFormat() {
+            document.execCommand('removeFormat', false, null);
+
+            const selection = window.getSelection();
+            if (!selection || selection.rangeCount === 0) return;
+            const range = selection.getRangeAt(0);
+
+            let node = selection.anchorNode;
+            let el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+            let bq = el ? el.closest('blockquote') : null;
+            if (bq) {
+                unwrapBlockquote(bq);
+            }
+
+            let common = range.commonAncestorContainer;
+            let commonEl = common ? (common.nodeType === 1 ? common : common.parentElement) : null;
+            if (commonEl) {
+                const quotes = commonEl.querySelectorAll ? commonEl.querySelectorAll('blockquote') : [];
+                quotes.forEach(q => unwrapBlockquote(q));
+            }
+
+            let code = el ? el.closest('pre, code') : null;
+            if (code) {
+                code.replaceWith(document.createTextNode(code.textContent));
+            }
+        }
+
         function applyCode() {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
             const range = selection.getRangeAt(0);
             if (range.collapsed) return;
 
-            let parentCode = selection.anchorNode.parentElement.closest('code, pre');
+            let node = selection.anchorNode;
+            let el = node ? (node.nodeType === 1 ? node : node.parentElement) : null;
+            let parentCode = el ? el.closest('code, pre') : null;
             if (parentCode) {
                 const text = parentCode.textContent;
                 parentCode.replaceWith(document.createTextNode(text));
@@ -328,10 +418,6 @@
             }
         }
 
-        function applyQuote() {
-            document.execCommand('formatBlock', false, 'blockquote');
-        }
-
         function formatViewerContent(html) {
             if (!html || html.trim() === '' || html === '-') {
                 return '<span style="color:#72767d;">내용 없음</span>';
@@ -350,7 +436,7 @@
             return text.replace(/<[^>]+>/g, '').trim();
         }
 
-        ipcRenderer.on('init-user-role', (e, role) => {
+        window.electronAPI.on('init-user-role', (role) => {
             myRole = role;
             if (role === 'viewer') {
                 document.getElementById('input-area').style.display = 'none';
@@ -381,7 +467,7 @@
             return { name, major: majorFormatted };
         }
 
-        ipcRenderer.on('receive-metadata', (e, data) => {
+        window.electronAPI.on('receive-metadata', (data) => {
             if(data.users) { 
                 doctorList = data.users; 
                 renderHeader(); 
@@ -391,11 +477,11 @@
             }
         });
 
-        ipcRenderer.on('init-patient-data', (e, patient) => {
+        window.electronAPI.on('init-patient-data', (patient) => {
             if(!patient) return;
             currentPatientInfo = patient;
             renderHeader();
-            ipcRenderer.send('request-history', patient.id);
+            window.electronAPI.send('request-history', patient.id);
             hardResetInputs();
         });
 
@@ -420,7 +506,7 @@
             document.getElementById('p-incharge').innerText = `담당: ${inChargeText}`;
         }
 
-        ipcRenderer.on('load-history', (e, historyData) => {
+        window.electronAPI.on('load-history', (historyData) => {
             cachedHistoryData = historyData || [];
             renderHistory(cachedHistoryData);
         });
@@ -466,10 +552,11 @@
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             document.getElementById('v-writer').innerText = `${writerName} ${writerMajor}`;
             
-            document.getElementById('v-s').innerHTML = formatViewerContent(data.s || data.S);
-            document.getElementById('v-o').innerHTML = formatViewerContent(data.o || data.O);
-            document.getElementById('v-a').innerHTML = formatViewerContent(data.a || data.A);
-            document.getElementById('v-p').innerHTML = formatViewerContent(data.p || data.P);
+            // ★ 상세 모달에 출력할 때도 XSS 소독 후 렌더링
+            document.getElementById('v-s').innerHTML = formatViewerContent(sanitizeHTML(data.s || data.S));
+            document.getElementById('v-o').innerHTML = formatViewerContent(sanitizeHTML(data.o || data.O));
+            document.getElementById('v-a').innerHTML = formatViewerContent(sanitizeHTML(data.a || data.A));
+            document.getElementById('v-p').innerHTML = formatViewerContent(sanitizeHTML(data.p || data.P));
             
             document.getElementById('view-modal').style.display = 'flex';
         }
@@ -483,10 +570,11 @@
             if (!currentViewData) return;
 
             const data = currentViewData.soapData || {};
-            document.getElementById('s').innerHTML = data.s || data.S || '';
-            document.getElementById('o').innerHTML = data.o || data.O || '';
-            document.getElementById('a').innerHTML = data.a || data.A || '';
-            document.getElementById('p').innerHTML = data.p || data.P || '';
+            // 불러와서 입력창에 채울 때도 안전하게 소독 처리
+            document.getElementById('s').innerHTML = sanitizeHTML(data.s || data.S || '');
+            document.getElementById('o').innerHTML = sanitizeHTML(data.o || data.O || '');
+            document.getElementById('a').innerHTML = sanitizeHTML(data.a || data.A || '');
+            document.getElementById('p').innerHTML = sanitizeHTML(data.p || data.P || '');
             
             const btn = document.getElementById('btn-save-action');
             if(btn) {
@@ -513,10 +601,12 @@
 
         function saveData() {
             if (myRole === 'viewer') return; 
-            const s = document.getElementById('s').innerHTML.trim();
-            const o = document.getElementById('o').innerHTML.trim();
-            const a = document.getElementById('a').innerHTML.trim();
-            const p = document.getElementById('p').innerHTML.trim();
+            
+            // ★ 저장 전 입력값 소독 처리
+            const s = sanitizeHTML(document.getElementById('s').innerHTML.trim());
+            const o = sanitizeHTML(document.getElementById('o').innerHTML.trim());
+            const a = sanitizeHTML(document.getElementById('a').innerHTML.trim());
+            const p = sanitizeHTML(document.getElementById('p').innerHTML.trim());
 
             const isAllEmpty = ['s', 'o', 'a', 'p'].every(id => {
                 const el = document.getElementById(id);
@@ -528,19 +618,19 @@
                 return;
             }
             
-            ipcRenderer.send('save-soap-signed', { 
+            window.electronAPI.send('save-soap-signed', { 
                 id: null, 
                 patientId: currentPatientInfo.id,
-                soapData: {s,o,a,p} 
+                soapData: { s, o, a, p } 
             });
         }
         
         function requestRefresh() {
             const pid = document.getElementById('p-id').innerText;
-            if(pid && pid !== '-') ipcRenderer.send('request-history', pid);
+            if(pid && pid !== '-') window.electronAPI.send('request-history', pid);
         }
 
-        ipcRenderer.on('save-success', (e, res) => {
+        window.electronAPI.on('save-success', (res) => {
             requestRefresh();
             hardResetInputs(); 
             
@@ -556,9 +646,9 @@
             }
         });
 
-        ipcRenderer.on('save-failed', (e, msg) => console.error(msg));
+        window.electronAPI.on('save-failed', (msg) => console.error(msg));
 
-        ipcRenderer.on('auto-sync-updated', () => {
+        window.electronAPI.on('auto-sync-updated', () => {
             console.log("⚡ 실시간 감지: 현재 차트 기록을 자동으로 새로고침합니다.");
             requestRefresh();
         });
