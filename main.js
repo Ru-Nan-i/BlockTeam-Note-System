@@ -450,3 +450,8 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
         console.error('PDF 저장 대화상자 오류:', err);
     }
 });
+
+// 앱 버전 조회 요청 처리
+ipcMain.on('request-app-version', (event) => {
+    event.reply('receive-app-version', app.getVersion());
+});
