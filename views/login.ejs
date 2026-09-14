@@ -11,6 +11,13 @@
             color: #72767d; font-size: 0.8em; font-family: sans-serif; 
             opacity: 0.7; pointer-events: none;
         }
+
+        /* 오른쪽 아래 버전 표시 */
+        .app-version {
+            position: fixed; bottom: 20px; right: 25px; 
+            color: #72767d; font-size: 0.8em; font-family: Consolas, 'Courier New', monospace; 
+            opacity: 0.7; pointer-events: none;
+        }
         
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
@@ -78,10 +85,20 @@
         &copy; 2026 BlockTeam. All rights reserved.
     </div>
 
+    <!-- 우측 하단 버전 표시 -->
+    <div class="app-version" id="login-app-version"></div>
+
     <script>
         const overlay = document.getElementById('loading-overlay');
         const loginBtn = document.getElementById('btn-login');
         const msgEl = document.getElementById('msg');
+
+        // 버전 요청 및 수신
+        window.electronAPI.send('request-app-version');
+        window.electronAPI.on('receive-app-version', (version) => {
+            const verEl = document.getElementById('login-app-version');
+            if (verEl) verEl.innerText = `v${version}`;
+        });
 
         function showLoading(title, desc) {
             if (title) document.getElementById('loading-title').innerText = title;
