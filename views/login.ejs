@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline';">
     <title>BlockTeam-Note-Data 로그인</title>
     <link rel="stylesheet" href="../assets/style.css">
     <style>
@@ -14,10 +15,9 @@
         .loading-overlay {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: #2f3136; z-index: 9999;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            transition: opacity 0.5s ease; 
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 0.3s ease; 
         }
-        
 
         .logo-loader-container {
             position: relative;
@@ -38,7 +38,6 @@
             object-fit: contain;
             animation: fill-up 2s cubic-bezier(0.4, 0.0, 0.2, 1) infinite; 
         }
-        
        
         @keyframes fill-up {
             0% { clip-path: inset(100% 0 0 0); } 
@@ -48,6 +47,11 @@
         
         .loading-text { color: #fff; font-size: 1.3em; font-weight: bold; font-family: 'Segoe UI', sans-serif;}
         .loading-subtext { color: #b9bbbe; margin-top: 10px; font-size: 0.9em; font-family: 'Segoe UI', sans-serif;}
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -56,16 +60,16 @@
             <img src="../assets/logoX.png" class="logo-bg">
             <img src="../assets/logoX.png" class="logo-fill">
         </div>
-        <div class="loading-text">드라이브 클라우드 동기화 중...</div>
-        <div class="loading-subtext">데이터를 안전하게 불러오고 있습니다. 잠시만 기다려주세요.</div>
+        <div id="loading-title" class="loading-text">보안 세션 인증 중...</div>
+        <div id="loading-desc" class="loading-subtext">데이터를 안전하게 동기화하고 있습니다. 잠시만 기다려주세요.</div>
     </div>
 
     <div class="login-wrapper">
         <div class="login-box">
             <h2 style="color: #eeeeee;">BlockTeam Note Data</h2>
-            <input type="text" id="uid" placeholder="ID">
+            <input type="text" id="uid" placeholder="ID" autocomplete="off">
             <input type="password" id="upw" placeholder="Password">
-            <button onclick="tryLogin()">Login System</button>
+            <button id="btn-login" onclick="tryLogin()">Login System</button>
             <p id="msg" style="color: #ed4245; font-size: 0.9em; margin-top: 10px;"></p>
         </div>
     </div>
@@ -75,30 +79,51 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
+        const overlay = document.getElementById('loading-overlay');
+        const loginBtn = document.getElementById('btn-login');
+        const msgEl = document.getElementById('msg');
 
-        ipcRenderer.send('check-cache-status');
-
-        ipcRenderer.on('cache-loaded', () => {
-            const overlay = document.getElementById('loading-overlay');
-            if (overlay) {
-                overlay.style.opacity = '0'; 
-                setTimeout(() => { overlay.style.display = 'none'; }, 500); 
-            }
-        });
-
-        function tryLogin() {
-            const id = document.getElementById('uid').value;
-            const password = document.getElementById('upw').value;
-            ipcRenderer.send('request-login', { id, password });
+        function showLoading(title, desc) {
+            if (title) document.getElementById('loading-title').innerText = title;
+            if (desc) document.getElementById('loading-desc').innerText = desc;
+            overlay.style.display = 'flex';
+            setTimeout(() => { overlay.style.opacity = '1'; }, 10);
+            loginBtn.disabled = true;
         }
 
-        ipcRenderer.on('login-failed', (e, msg) => {
-            document.getElementById('msg').innerText = msg;
+        function hideLoading() {
+            overlay.style.opacity = '0';
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                loginBtn.disabled = false;
+            }, 300);
+        }
+
+        function tryLogin() {
+            const id = document.getElementById('uid').value.trim();
+            const password = document.getElementById('upw').value.trim();
+
+            if (!id || !password) {
+                msgEl.innerText = '아이디와 비밀번호를 모두 입력해주세요.';
+                return;
+            }
+
+            msgEl.innerText = '';
+            showLoading('보안 세션 인증 및 데이터 로딩 중...', '드라이브와 통신하여 세션 토큰을 확인하고 있습니다.');
+            window.electronAPI.send('request-login', { id, password });
+        }
+
+        window.electronAPI.on('login-failed', (msg) => {
+            hideLoading();
+            msgEl.innerText = msg || '로그인에 실패했습니다.';
         });
 
         document.getElementById('upw').addEventListener('keypress', function (e) {
             if (e.key === 'Enter') tryLogin();
+        });
+
+        document.getElementById('uid').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') document.getElementById('upw').focus();
         });
     </script>
 </body>

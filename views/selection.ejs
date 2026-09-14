@@ -115,7 +115,7 @@
 </head>
 <body>
     <div class="header">
-        <div class="title">🏥 콘텐츠 선택 (Contents Selection)</div>
+        <div class="title">💾 콘텐츠 선택 (Contents Selection)</div>
         <button class="logout-btn" onclick="window.location.href='login.ejs'">🚪 로그아웃</button>
     </div>
 
@@ -136,8 +136,6 @@
     </div>
 
     <script>
-        const { ipcRenderer } = require('electron');
-        
         let allDepts = [];
         let allPatients = [];
         let doctorList = [];
@@ -145,15 +143,14 @@
 
         window.onload = () => {
             requestData();
-            // 3초마다 데이터 새로고침
             setInterval(requestData, 3000);
         };
 
         function requestData() {
-            ipcRenderer.send('request-metadata');
+            window.electronAPI.send('request-metadata');
         }
 
-        ipcRenderer.on('receive-metadata', (e, data) => {
+        window.electronAPI.on('receive-metadata', (data) => {
             allDepts = data.departments || [];
             allPatients = data.patients || [];
             doctorList = data.users || []; 
@@ -171,7 +168,6 @@
             }
         });
 
-        // 1. 진료과/콘텐츠 목록 렌더링 및 이전 선택 부서 자동 복원
         function renderDepartments() {
             const sidebar = document.getElementById('dept-list');
             sidebar.innerHTML = ''; 
@@ -180,10 +176,9 @@
             const savedDeptName = sessionStorage.getItem('lastSelectedDeptName');
             let targetElement = null;
 
-            // 전체 검색 탭 생성
             const consultDiv = document.createElement('div');
             consultDiv.className = 'dept-item';
-            consultDiv.innerText = '🤝 전체 검색';
+            consultDiv.innerText = '🗃️ 전체 검색';
             consultDiv.style.color = '#3ba55c';
             consultDiv.style.borderColor = '#3ba55c';
             consultDiv.onclick = () => selectDept('CONSULT', '전체', consultDiv);
@@ -209,17 +204,14 @@
                 });
             }
 
-            // ★ 이전에 선택했던 부서가 존재하면 해당 탭을 자동 활성화
             if (savedDeptId && targetElement && !currentDeptId) {
                 selectDept(savedDeptId, savedDeptName || '', targetElement);
             }
         }
 
-        // 2. 진료과/콘텐츠 선택 (세션 저장 포함)
         function selectDept(deptId, deptName, element) {
             currentDeptId = deptId;
             
-            // ★ 선택한 부서 상태를 브라우저 세션에 저장
             sessionStorage.setItem('lastSelectedDeptId', deptId);
             sessionStorage.setItem('lastSelectedDeptName', deptName);
 
@@ -239,7 +231,6 @@
             filterPatients();
         }
 
-        // 3. 환자 필터링
         function filterPatients() {
             if (!currentDeptId) return; 
 
@@ -278,7 +269,7 @@
                 const div = document.createElement('div');
                 div.className = 'patient-card';
                 div.onclick = () => {
-                    ipcRenderer.send('patient-selected', p); 
+                    window.electronAPI.send('patient-selected', p); 
                 };
                 
                 const deptTag = (currentDeptId === 'CONSULT') 
