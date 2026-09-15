@@ -5,15 +5,15 @@ const fs = require('fs');
 require('ejs-electron');
 
 let mainWindow;
-let sessionToken = null; // ★ 로그인 성공 시 GAS로부터 발급받는 동적 세션 토큰
+let sessionToken = null; // 로그인 성공 시 GAS로부터 발급받는 동적 세션 토큰
 let currentDoctorId = null;
 let currentPatient = null;
 let currentUserRole = 'doctor';
 
 // ====================================================================
-// ★ 1. Google Apps Script(GAS) 웹앱 URL (마스터 키 없음)
+// ★ 1. Google Apps Script(GAS) 웹앱 URL
 // ====================================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzUdgKU12V2DEfWtduHHF-N_czYWR38CQetBh0sxXGI7R96OLZh2f962MUS1TSvFjMHsQ/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyCQD7InLa0hzUiJ50k9KixUH03M9zs_pc9ZObisRUBOez82hcZ696rjtXKm8NkJH7Olg/exec';
 
 // ====================================================================
 // ★ 2. 메모리 캐시 저장소
@@ -33,7 +33,7 @@ async function requestGAS(action, payload = {}) {
     try {
         const bodyData = {
             action,
-            token: sessionToken, // 로그인 시 발급받은 일회성 토큰 동봉
+            token: sessionToken,
             ...payload
         };
 
@@ -64,7 +64,7 @@ async function requestGAS(action, payload = {}) {
                 console.error(`❌ GAS 작업 실패 [${action}]:`, result.message);
             }
 
-            // 세션 만료 시 로그인 화면으로 강제 전환
+            // 세션 만료 시 로그인 화면으로 전환
             if (result && result.code === 'UNAUTHORIZED' && action !== 'login') {
                 console.warn("⚠️ 세션이 만료되어 로그인 화면으로 이동합니다.");
                 sessionToken = null;
@@ -96,7 +96,7 @@ async function requestGAS(action, payload = {}) {
 }
 
 // ====================================================================
-// ★ 4. 초기 데이터 로드 (로그인 후 호출됨)
+// ★ 4. F5 새로고침용 전체 데이터 캐시 갱신
 // ====================================================================
 async function loadEverythingToCache() {
     console.log("📥 GAS를 통해 드라이브에서 전체 데이터를 불러옵니다...");
@@ -211,7 +211,6 @@ function createWindow() {
     mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
 
     mainWindow.webContents.once('did-finish-load', () => {
-        // 로그인 화면이 즉시 열리도록 준비 신호 전송
         mainWindow.webContents.send('cache-loaded');
     });
 
@@ -238,17 +237,26 @@ app.whenReady().then(() => {
 // ====================================================================
 // ★ 9. IPC 통신 처리
 // ====================================================================
+
+// 앱 버전 조회 요청
+ipcMain.on('request-app-version', (event) => {
+    event.reply('receive-app-version', app.getVersion());
+});
+
+// 캐시 상태 확인
 ipcMain.on('check-cache-status', (event) => {
     event.reply('cache-loaded');
 });
 
-// 로그인 (GAS 서버 직접 인증 및 토큰 발급)
+// ====================================================================
+// 로그인 (1회 왕복 통합 로딩 최적화)
+// ====================================================================
 ipcMain.on('request-login', async (event, creds) => {
     if (!creds || !creds.id || !creds.password) {
         return event.reply('login-failed', '아이디와 비밀번호를 입력해주세요.');
     }
 
-    console.log(`🔐 [로그인 시도] ID: ${creds.id}`);
+    console.log(`🔐 [초고속 통합 로그인 시도] ID: ${creds.id}`);
     const result = await requestGAS('login', {
         id: creds.id,
         password: creds.password
@@ -259,15 +267,22 @@ ipcMain.on('request-login', async (event, creds) => {
         currentDoctorId = result.user.id;
         currentUserRole = result.user.role || 'doctor';
 
-        console.log(`✅ 로그인 성공: ${result.user.name}(${result.user.id}) [${currentUserRole}]`);
+        // 로그인 응답에 함께 온 데이터로 즉시 캐시 적재 (추가 loadAll 호출 제거)
+        if (result.data) {
+            localCache.departments = result.data.departments || [];
+            localCache.users = result.data.users || [];
+            localCache.patients = result.data.patients || [];
+            localCache.charts = result.data.charts || [];
+            localCache.isLoaded = true;
+            console.log(`⚡ 1회 통신 완료: 부서 ${localCache.departments.length}개, 항목 ${localCache.patients.length}개, 차트 ${localCache.charts.length}개 캐싱됨`);
+        } else {
+            await loadEverythingToCache();
+        }
 
-        // 1. 전체 데이터 캐시 로드
-        await loadEverythingToCache();
-
-        // 2. 백그라운드 실시간 동기화 개시
+        // 백그라운드 실시간 동기화 개시
         startAutoSync();
 
-        // 3. 페이지 이동
+        // 화면 전환
         const targetPage = currentUserRole === 'admin' ? 'admin.ejs' : 'selection.ejs';
         mainWindow.loadURL('file://' + __dirname + '/views/' + targetPage);
     } else {
@@ -449,9 +464,4 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
     } catch (err) {
         console.error('PDF 저장 대화상자 오류:', err);
     }
-});
-
-// 앱 버전 조회 요청 처리
-ipcMain.on('request-app-version', (event) => {
-    event.reply('receive-app-version', app.getVersion());
 });
