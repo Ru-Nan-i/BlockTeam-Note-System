@@ -6,40 +6,43 @@
     <title>콘텐츠 선택</title>
     <link rel="stylesheet" href="../assets/style.css">
     <style>
-        /* 전체 레이아웃 */
         body { 
             margin: 0; padding: 0; 
-            background-color: #36393f; 
+            background-color: var(--bg-base); 
             height: 100vh; overflow: hidden;
             display: flex; flex-direction: column;
         }
         
-        /* 1. 상단 헤더 */
+        /* 1. 상단 타이틀 영역 */
         .header { 
-            height: 60px; background: #202225; border-bottom: 1px solid #18191c;
+            height: 54px; background: var(--bg-base); 
+            border-bottom: 1px solid var(--border-color);
             display: flex; justify-content: space-between; align-items: center; 
-            padding: 0 25px; flex-shrink: 0;
+            padding: 0 26px; flex-shrink: 0;
         }
-        .title { color: white; font-size: 1.2em; font-weight: bold; }
+        .title { color: var(--text-primary); font-size: 1.18em; font-weight: bold; }
         
-        /* 로그아웃 버튼 (작게 강제 고정) */
+        /* 로그아웃 버튼 */
         .logout-btn { 
-            background: #ed4245; 
-            color: white; 
-            border: none; 
-            
+            background: var(--bg-control); 
+            color: var(--text-primary); 
+            border: 1px solid var(--border-color); 
             width: auto !important;
             flex-grow: 0 !important;
-            
             padding: 0 15px !important; 
             font-size: 13px !important;
-            height: 32px !important;       
-            line-height: 32px !important;  
-            
-            border-radius: 4px; 
+            height: 31px !important;       
+            line-height: 29px !important;  
+            border-radius: 5px; 
             cursor: pointer; 
             font-weight: bold;
-            margin-left: auto; 
+            margin: 0 0 0 auto; 
+            transition: 0.15s;
+        }
+        .logout-btn:hover {
+            background: var(--danger-color);
+            color: #ffffff;
+            border-color: var(--danger-hover);
         }
 
         /* 2. 메인 컨텐츠 (좌우 분할) */
@@ -47,101 +50,150 @@
             display: flex; flex: 1; overflow: hidden;
         }
 
-        /* [왼쪽] 진료과 목록 */
+        /* [왼쪽] 탐색 사이드바 */
         .dept-sidebar {
-            width: 250px; background: #2f3136; 
-            border-right: 1px solid #202225;
+            width: 245px; background: var(--bg-base); 
+            border-right: 1px solid var(--border-color);
             display: flex; flex-direction: column;
-            padding: 15px; overflow-y: auto;
+            padding: 14px 12px; overflow-y: auto;
         }
         .dept-item {
-            padding: 15px; margin-bottom: 8px; border-radius: 6px;
-            color: #b9bbbe; cursor: pointer; font-weight: bold;
-            transition: 0.2s; border: 1px solid transparent;
+            position: relative;
+            padding: 12px 15px; margin-bottom: 4px; border-radius: 5px;
+            color: var(--text-secondary); cursor: pointer; font-weight: bold; font-size: 0.96em;
+            transition: 0.12s;
         }
-        .dept-item:hover { background: #36393f; color: white; }
+        .dept-item:hover { background: var(--bg-panel); color: var(--text-primary); }
+        .dept-item.consult-item {
+            color: var(--text-primary);
+            margin-bottom: 10px;
+            padding-bottom: 13px;
+            border-bottom: 1px solid var(--border-color);
+            border-radius: 5px 5px 0 0;
+        }
         .dept-item.active { 
-            background: #5865f2; color: white; 
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            background: var(--bg-panel); color: var(--text-primary); 
+        }
+        .dept-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 9px; bottom: 9px;
+            width: 3px;
+            border-radius: 2px;
+            background: var(--accent-primary);
         }
 
-        /* [오른쪽] 환자 목록 영역 */
+        /* [오른쪽] 항목 목록 영역 */
         .patient-area {
-            flex: 1; padding: 25px; overflow-y: auto;
+            flex: 1; padding: 24px 28px; overflow-y: auto;
             display: flex; flex-direction: column;
+            background: var(--bg-base);
         }
 
         /* 검색창 */
         .search-box { 
-            background: #202225; border: 1px solid #40444b; 
-            padding: 12px; border-radius: 8px; color: white; 
-            width: 100%; font-size: 1em; margin-bottom: 20px; box-sizing: border-box;
+            background: var(--bg-panel); border: 1px solid var(--border-color); 
+            padding: 11px 14px; border-radius: 6px; color: var(--text-primary); 
+            width: 100%; font-size: 0.98em; margin: 0 0 22px 0; box-sizing: border-box;
         }
-        .search-box:focus { outline: 2px solid #5865f2; }
+        .search-box:focus { 
+            background: var(--bg-input);
+            border-color: #545861; 
+        }
 
-        /* 환자 그리드 */
+        .section-heading {
+            color: var(--text-primary);
+            margin: 0 0 16px 0;
+            font-size: 1.15em;
+            font-weight: bold;
+        }
+
+        /* 항목 그리드 */
         .patient-grid { 
             display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); 
-            gap: 15px; 
+            gap: 14px; 
         }
 
-        /* 환자 카드 디자인 */
+        /* 카드 디자인 */
         .patient-card {
-            background: #2f3136; border-radius: 8px; padding: 20px;
-            border: 1px solid #202225; cursor: pointer; transition: 0.2s;
-            display: flex; flex-direction: column; gap: 5px;
-            position: relative; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background: var(--bg-panel); border-radius: 6px; padding: 18px 20px;
+            border: 1px solid var(--border-color);
+            cursor: pointer; transition: background-color 0.14s, border-color 0.14s;
+            display: flex; flex-direction: column;
+            box-sizing: border-box;
         }
         .patient-card:hover { 
-            transform: translateY(-3px); 
-            border-color: #5865f2; 
-            background: #32353b;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            background: var(--bg-elevated);
+            border-color: var(--border-hover);
         }
 
-        .p-name { color: white; font-size: 1.3em; font-weight: bold; margin-bottom: 2px; }
-        .p-id { color: #72767d; font-size: 0.9em; font-family: monospace; background: #202225; display: inline-block; padding: 2px 6px; border-radius: 4px; width: fit-content;}
+        .p-name { 
+            color: var(--text-primary); font-size: 1.24em; font-weight: bold; 
+            margin-bottom: 6px; word-break: keep-all;
+        }
+        .p-id-wrap {
+            margin-bottom: 12px;
+        }
+        .p-id { 
+            color: #9ea2aa; font-size: 0.88em; font-family: Consolas, monospace; 
+            background: var(--bg-input); border: 1px solid var(--border-color);
+            display: inline-block; padding: 2px 7px; 
+            border-radius: 4px; width: fit-content;
+        }
         
-        /* 담당의 표시 (노란색) */
+        /* 담당의 표시 (상단 구분선 복원 + 우측 영문 3글자 배지 정렬) */
         .p-incharge { 
-            color: #ffd700; font-size: 0.9em; font-weight: bold; margin-top: 10px; 
-            padding-top: 8px; border-top: 1px solid #40444b;
-            display: flex; align-items: center; gap: 5px;
+            color: #cfd2d8; font-size: 0.9em; font-weight: bold; margin-top: auto; 
+            padding-top: 9px; border-top: 1px solid var(--border-color);
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+        }
+
+        .incharge-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .dept-badge {
+            background: var(--bg-control);
+            color: #dcdde0;
+            border: 1px solid var(--border-hover);
+            font-size: 0.78em;
+            font-weight: bold;
+            padding: 2px 7px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            letter-spacing: 0.4px;
         }
 
         /* 우측 하단 고정 버전 태그 */
         .selection-app-version {
             position: fixed;
-            bottom: 15px;
-            right: 20px;
-            color: #72767d;
+            bottom: 14px;
+            right: 22px;
+            color: var(--text-muted);
             font-size: 0.8em;
             font-family: Consolas, 'Courier New', monospace;
-            opacity: 0.6;
             pointer-events: none;
             z-index: 100;
         }
-
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: #2f3136; }
     </style>
 </head>
 <body>
     <div class="header">
-        <div class="title">💾 콘텐츠 선택 (Contents Selection)</div>
-        <button class="logout-btn" onclick="window.location.href='login.ejs'">🚪 로그아웃</button>
+        <div class="title">콘텐츠 선택 (Contents Selection)</div>
+        <button class="logout-btn" onclick="window.location.href='login.ejs'">로그아웃</button>
     </div>
 
     <div class="main-container">
         <div class="dept-sidebar" id="dept-list">
-            <div style="color:#72767d; text-align:center; margin-top:20px;">로딩중...</div>
+            <div style="color:var(--text-muted); text-align:center; margin-top:20px;">로딩중...</div>
         </div>
 
         <div class="patient-area">
             <input type="text" id="search" class="search-box" placeholder="🔍 선택된 콘텐츠 내 검색..." onkeyup="filterPatients()">
             
-            <h3 id="current-dept-title" style="color:white; margin-top:0; border-bottom:1px solid #444; padding-bottom:10px;">
+            <h3 id="current-dept-title" class="section-heading">
                 ◀ 왼쪽에서 콘텐츠를 선택하세요
             </h3>
             
@@ -149,7 +201,6 @@
         </div>
     </div>
 
-    <!-- 우측 하단 버전 표시 -->
     <div class="selection-app-version" id="selection-app-version"></div>
 
     <script>
@@ -159,13 +210,11 @@
         let currentDeptId = null;
 
         window.onload = () => {
-            // 앱 버전 요청
             window.electronAPI.send('request-app-version');
             requestData();
             setInterval(requestData, 3000);
         };
 
-        // 앱 버전 수신 및 렌더링
         window.electronAPI.on('receive-app-version', (version) => {
             const verEl = document.getElementById('selection-app-version');
             if (verEl) verEl.innerText = `v${version}`;
@@ -202,10 +251,8 @@
             let targetElement = null;
 
             const consultDiv = document.createElement('div');
-            consultDiv.className = 'dept-item';
-            consultDiv.innerText = '🗃️ 전체 검색';
-            consultDiv.style.color = '#3ba55c';
-            consultDiv.style.borderColor = '#3ba55c';
+            consultDiv.className = 'dept-item consult-item';
+            consultDiv.innerText = '전체 검색';
             consultDiv.onclick = () => selectDept('CONSULT', '전체', consultDiv);
             sidebar.appendChild(consultDiv);
 
@@ -214,7 +261,7 @@
             }
 
             if (allDepts.length === 0) {
-                sidebar.innerHTML += '<div style="padding:10px; color:#72767d;">등록된 콘텐츠 없음</div>';
+                sidebar.innerHTML += '<div style="padding:10px; color:var(--text-muted);">등록된 콘텐츠 없음</div>';
             } else {
                 allDepts.forEach(d => {
                     const div = document.createElement('div');
@@ -245,10 +292,10 @@
             if(element) element.classList.add('active');
 
             if (deptId === 'CONSULT') {
-                document.getElementById('current-dept-title').innerText = `🤝 전체 항목 검색`;
-                document.getElementById('search').placeholder = "🔍 전체 항목 중 이름/번호 검색...";
+                document.getElementById('current-dept-title').innerText = `전체 항목`;
+                document.getElementById('search').placeholder = "🔍 전체 항목 중 이름 또는 번호 검색...";
             } else {
-                document.getElementById('current-dept-title').innerText = `📂 ${deptName} 구성 항목`;
+                document.getElementById('current-dept-title').innerText = `${deptName}`;
                 document.getElementById('search').placeholder = "🔍 선택된 콘텐츠 내 검색...";
             }
             
@@ -275,19 +322,21 @@
             grid.innerHTML = '';
 
             if (list.length === 0) {
-                grid.innerHTML = '<div style="color:#72767d; padding:20px 0; font-size:1.1em; grid-column: 1 / -1;">해당 조건의 항목이 없습니다.</div>';
+                grid.innerHTML = '<div style="color:var(--text-muted); padding:20px 0; font-size:1.05em; grid-column: 1 / -1;">해당 조건의 항목이 없습니다.</div>';
                 return;
             }
 
+            const fragment = document.createDocumentFragment();
+
             list.forEach(p => {
-                let inChargeText = '<span style="color:#72767d; font-weight:normal;">배정 안됨</span>';
+                let inChargeText = '<span style="color:var(--text-muted); font-weight:normal;">배정 안됨</span>';
                 if (p.inChargeId) {
                     const doc = doctorList.find(u => u.id === p.inChargeId);
                     if (doc) {
                         const major = doc.major ? `(${doc.major})` : '';
-                        inChargeText = `👑 ${doc.name} ${major}`;
+                        inChargeText = `${doc.name} ${major}`;
                     } else {
-                        inChargeText = `👑 ${p.inChargeId}`;
+                        inChargeText = `${p.inChargeId}`;
                     }
                 }
 
@@ -297,19 +346,22 @@
                     window.electronAPI.send('patient-selected', p); 
                 };
                 
-                const deptTag = (currentDeptId === 'CONSULT') 
-                    ? `<span style="background:#5865f2; font-size:0.7em; padding:2px 5px; border-radius:3px; float:right;">${p.deptId}</span>` 
+                const deptTag = (currentDeptId === 'CONSULT' && p.deptId) 
+                    ? `<span class="dept-badge">${p.deptId}</span>` 
                     : '';
 
                 div.innerHTML = `
-                    <div class="p-name">${p.name} ${deptTag}</div>
-                    <div><span class="p-id">${p.id}</span></div>
+                    <div class="p-name">${p.name}</div>
+                    <div class="p-id-wrap"><span class="p-id">${p.id}</span></div>
                     <div class="p-incharge">
-                        ${inChargeText}
+                        <span class="incharge-text">${inChargeText}</span>
+                        ${deptTag}
                     </div>
                 `;
-                grid.appendChild(div);
+                fragment.appendChild(div);
             });
+
+            grid.appendChild(fragment);
         }
     </script>
 </body>

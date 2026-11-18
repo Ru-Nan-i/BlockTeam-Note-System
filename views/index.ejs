@@ -10,45 +10,179 @@
     <style>
         body { 
             display: block !important; margin: 0; padding: 0; 
-            overflow: hidden; background-color: #36393f; 
+            overflow: hidden; background-color: var(--bg-base); 
         }
 
         .container { 
             display: grid; grid-template-columns: 2fr 1fr; 
-            gap: 25px; padding: 25px; height: 94vh; box-sizing: border-box; 
+            gap: 20px; padding: 20px 22px; height: 100vh; box-sizing: border-box; 
             max-width: 1600px; margin: 0 auto;
         }
         
-        .chart-section, .history-section { 
-            background: var(--panel-color); padding: 25px; 
-            border-radius: 12px; display: flex; flex-direction: column; 
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            height: 100%; overflow: hidden; position: relative;
+        .chart-section { 
+            background: var(--bg-panel); padding: 22px 24px; 
+            border: 1px solid var(--border-color);
+            border-radius: 8px; display: flex; flex-direction: column; 
+            height: 100%; box-sizing: border-box;
+            overflow: hidden; position: relative;
+            -webkit-app-region: no-drag !important;
         }
 
-        .chart-section { -webkit-app-region: no-drag !important; }
+        /* 우측 분할 레이아웃 (상단: 차팅 기록 6 / 하단: 포스트잇 4) */
+        .right-sidebar {
+            display: flex; flex-direction: column;
+            gap: 16px; height: 100%; min-height: 0;
+            box-sizing: border-box; overflow: hidden;
+        }
 
+        .history-section {
+            flex: 6; min-height: 0; box-sizing: border-box;
+            background: var(--bg-panel); padding: 20px 22px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px; display: flex; flex-direction: column;
+            overflow: hidden; position: relative;
+        }
+
+        .postit-section {
+            flex: 4; min-height: 0; box-sizing: border-box;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 18px 22px;
+            display: flex; flex-direction: column;
+            overflow: hidden; position: relative;
+        }
+
+        .postit-header {
+            display: flex; justify-content: space-between; align-items: center;
+            min-height: 26px;
+            margin-bottom: 12px; padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color); flex-shrink: 0;
+        }
+
+        .postit-title {
+            display: inline-flex; align-items: center; gap: 8px;
+            font-weight: bold; font-size: 1.02em; color: var(--text-primary);
+            line-height: 1.2;
+        }
+
+        .postit-status {
+            display: inline-flex; align-items: center;
+            font-size: 0.78em; font-weight: normal; color: var(--text-muted);
+            line-height: 1.2;
+        }
+
+        .btn-clear-postit {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: auto !important; margin: 0 !important;
+            height: 26px; padding: 0 10px; line-height: 1;
+            background: var(--bg-control); border: 1px solid var(--border-color);
+            color: var(--text-secondary); font-size: 0.8em; font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer; transition: 0.14s;
+        }
+
+        .btn-clear-postit:hover {
+            background: var(--danger-color); border-color: var(--danger-hover); color: #ffffff;
+        }
+
+        .postit-textarea {
+            flex: 1; width: 100%; box-sizing: border-box;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 5px; padding: 12px;
+            color: var(--text-primary); font-size: 0.95em; line-height: 1.55;
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif;
+            resize: none; outline: none; margin-top: 0;
+            -webkit-user-select: text !important;
+            user-select: text !important;
+            transition: border-color 0.14s, background-color 0.14s;
+        }
+
+        .postit-textarea:focus {
+            background: #161719;
+            border-color: #545861;
+        }
+
+        .postit-textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* 상단 항목 정보 헤더 */
         .patient-info { 
-            background: #202225; padding: 16px 20px; border-radius: 8px; margin-bottom: 12px; 
+            background: var(--bg-input); padding: 14px 18px; border-radius: 6px; margin-bottom: 12px; 
             display: flex; justify-content: space-between; align-items: center; 
-            border: 1px solid #2f3136; flex-shrink: 0; 
+            border: 1px solid var(--border-color);
+            flex-shrink: 0; 
         }
-        .p-tag { background: #5865f2; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; margin-right: 10px; font-weight: bold; }
+
+        .patient-info-left {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .p-tag { 
+            display: inline-flex; align-items: center; justify-content: center;
+            height: 24px; padding: 0 8px; box-sizing: border-box;
+            background: var(--bg-control); color: var(--text-secondary);
+            border: 1px solid var(--border-hover);
+            border-radius: 4px; font-size: 12.5px; font-weight: bold; line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .header-title-text {
+            display: inline-flex; align-items: center;
+            height: 24px; line-height: 1;
+            font-size: 19px; font-weight: bold; color: var(--text-primary);
+            transform: translateY(-0.5px);
+        }
+
+        .header-divider {
+            display: inline-block;
+            width: 1px;
+            height: 16px;
+            background: var(--border-hover);
+            margin: 0 2px;
+            flex-shrink: 0;
+        }
+
+        /* 차팅창 7자리 고유번호 배지 스타일 */
+        .chart-id-badge {
+            display: inline-flex; align-items: center; justify-content: center;
+            height: 24px; padding: 0 9px; box-sizing: border-box;
+            color: #b4b7bd;
+            font-size: 13.5px; line-height: 1;
+            font-family: Consolas, monospace;
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .patient-info-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+        }
 
         .input-scroll-area {
-            flex: 1; overflow-y: auto; padding: 0 12px 5px 5px; 
-            margin-bottom: 15px; min-height: 0; position: relative; z-index: 10; 
+            flex: 1; overflow-y: auto; padding: 0 10px 5px 2px; 
+            margin-bottom: 14px; min-height: 0; position: relative; z-index: 10; 
         }
 
         /* 상단 서식 툴바 */
         .format-toolbar {
             position: sticky; top: 0; z-index: 50;
-            background: transparent;
-            padding: 8px 0 8px 0;
-            margin-top: 4px;
-            margin-bottom: 8px;
-            display: flex; flex-direction: row; gap: 6px; align-items: center;
-            border: none; box-shadow: none;
+            background: var(--bg-elevated);
+            padding: 5px 8px;
+            margin-top: 2px;
+            margin-bottom: 12px;
+            display: flex; flex-direction: row; gap: 4px; align-items: center;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             flex-wrap: nowrap !important;
             overflow-x: auto;
         }
@@ -57,44 +191,49 @@
             width: auto !important;
             flex: 0 0 auto !important;
             margin: 0 !important;
-            background: #2f3136; color: #b9bbbe; border: 1px solid #40444b;
+            background: transparent; color: var(--text-primary); border: 1px solid transparent;
             padding: 0 10px !important; border-radius: 4px; cursor: pointer;
-            font-size: 0.82em !important; font-weight: bold; transition: 0.15s;
+            font-size: 0.83em !important; font-weight: bold; transition: 0.12s;
             display: inline-flex; align-items: center; justify-content: center;
             user-select: none; height: 26px !important; box-sizing: border-box;
             white-space: nowrap;
         }
         .tool-btn:hover {
-            background: #5865f2; color: white; border-color: #5865f2;
+            background: rgba(255, 255, 255, 0.08); color: #ffffff;
         }
 
-        label { color: #b9bbbe; font-weight: bold; margin-bottom: 6px; display: block; font-size: 0.95em; }
+        label { color: var(--text-secondary); font-weight: bold; margin-bottom: 6px; display: block; font-size: 0.94em; }
 
         /* 리치 텍스트 에디터 본체 */
         .rich-editor {
-            width: 100%; box-sizing: border-box; background: #40444b;
-            border: 1px solid #2f3136; color: #ffffff; padding: 12px;
-            border-radius: 6px; font-size: 1em; line-height: 1.6;
-            font-family: 'Segoe UI', sans-serif; overflow-y: auto;
+            width: 100%; box-sizing: border-box; background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary); padding: 12px 14px;
+            border-radius: 5px; font-size: 0.98em; line-height: 1.6;
+            font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; overflow-y: auto;
             margin-bottom: 16px; outline: none; white-space: pre-wrap;
             word-break: break-word; -webkit-user-select: text !important;
             user-select: text !important;
+            transition: border-color 0.14s, background-color 0.14s;
         }
-        .rich-editor:focus { outline: 2px solid #5865f2; }
+        .rich-editor:focus { 
+            background: #161719;
+            border-color: #545861; 
+        }
         
-        .editor-large { height: 300px; }
-        .editor-small { height: 150px; }
+        .editor-large { height: 340px; }
+        .editor-small { height: 170px; }
 
         .rich-editor:empty:before {
             content: attr(data-placeholder);
-            color: #72767d; pointer-events: none; display: block;
+            color: var(--text-muted); pointer-events: none; display: block;
         }
 
         /* 서식 스타일 */
         .rich-editor strong, .rich-editor b, .soap-text strong, .soap-text b { color: #ffffff; font-weight: bold; }
         .rich-editor u, .soap-text u { text-decoration: underline; }
         .rich-editor em, .rich-editor i, .soap-text em, .soap-text i { font-style: italic; color: #ffffff; }
-        .rich-editor strike, .rich-editor del, .soap-text strike, .soap-text del { text-decoration: line-through; color: #b9bbbe; }
+        .rich-editor strike, .rich-editor del, .soap-text strike, .soap-text del { text-decoration: line-through; color: var(--text-secondary); }
         
         /* 인라인 코드 */
         .rich-editor code, .soap-text code {
@@ -108,8 +247,8 @@
 
         /* 여러 줄 코드 블록 */
         .rich-editor pre, .soap-text pre {
-            background: #1e1f22 !important;
-            border: 1px solid #111214 !important;
+            background: #141517 !important;
+            border: 1px solid var(--border-color) !important;
             border-radius: 5px !important;
             padding: 10px 14px !important;
             margin: 8px 0 !important;
@@ -132,58 +271,63 @@
 
         /* 인용구 */
         .rich-editor blockquote, .soap-text blockquote {
-            border-left: 4px solid #4e5058; margin: 6px 0; padding: 4px 10px;
-            background: rgba(78, 80, 88, 0.15); color: #b9bbbe; border-radius: 0 4px 4px 0;
+            border-left: 4px solid #545861; margin: 6px 0; padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.04); color: #cfd2d8; border-radius: 0 4px 4px 0;
         }
 
         /* 상세 모달창 */
         .modal-overlay { 
             display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.7); z-index: 999;
+            background: rgba(0, 0, 0, 0.72); z-index: 999;
             justify-content: center; align-items: center;
         }
         .view-box { 
-            background: #2f3136; padding: 30px; border-radius: 12px; 
-            border: 1px solid #3ba55c; width: 650px; max-height: 80vh; 
-            display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            background: var(--bg-panel); padding: 28px; border-radius: 8px; 
+            border: 1px solid var(--border-hover);
+            width: 650px; max-height: 82vh; 
+            display: flex; flex-direction: column; box-shadow: 0 16px 40px rgba(0,0,0,0.6); 
         }
-        .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+        .view-header { border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .view-content { overflow-y: auto; flex: 1; padding-right: 8px; }
         
-        .soap-row { margin-bottom: 15px; }
-        .soap-label { color: #b9bbbe; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        .soap-row { margin-bottom: 14px; }
+        .soap-label { color: var(--text-secondary); font-weight: bold; display: block; margin-bottom: 5px; font-size: 0.96em; }
         
         .soap-text { 
-            background: #202225; padding: 14px; border-radius: 6px; 
-            color: #ffffff !important; border: 1px solid #2f3136; font-size: 1em; line-height: 1.6;
+            background: var(--bg-input); padding: 12px 14px; border-radius: 5px; 
+            color: var(--text-primary) !important; border: 1px solid var(--border-color); font-size: 0.98em; line-height: 1.6;
             white-space: pre-wrap !important; word-break: break-word;
             -webkit-user-select: text !important;
         }
 
         .btn-group { display: flex; gap: 10px; margin-top: auto; flex-shrink: 0; }
-        .btn-back { flex: 0.8; background: #2f3136; color: #b9bbbe; border: 1px solid #40444b; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
-        .btn-back:hover { background: #ed4245; color: white; border-color: #ed4245; }
-        .btn-reset { flex: 1; background: #4f545c; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
-        .btn-reset:hover { filter: brightness(1.1); transform: translateY(-2px); }
-        #btn-save-action { flex: 2; background: #5865f2; color: white; border: none; padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s; }
-        #btn-save-action:hover { filter: brightness(1.1); transform: translateY(-2px); }
+        .btn-back { flex: 0.8; margin: 0; background: var(--bg-control); color: var(--text-primary); border: 1px solid var(--border-color); padding: 13px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.14s; }
+        .btn-back:hover { background: var(--danger-color); color: #ffffff; border-color: var(--danger-hover); }
+        .btn-reset { flex: 1; margin: 0; background: var(--bg-control); color: var(--text-primary); border: 1px solid var(--border-color); padding: 13px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.14s; }
+        .btn-reset:hover { background: var(--bg-control-hover); }
+        #btn-save-action { flex: 2; margin: 0; background: var(--accent-primary); color: #ffffff; border: none; padding: 13px; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.14s; }
+        #btn-save-action:hover { background: var(--accent-hover); }
         
-        ul { list-style: none; padding: 0; overflow-y: auto; flex: 1; padding-right: 5px; }
-        li.history-item { background: #2f3136; margin-bottom: 15px; padding: 20px; border-radius: 8px; border: 1px solid #202225; cursor: pointer; transition: 0.2s; }
-        li.history-item:hover { border-color: #5865f2; transform: translateX(5px); }
-        .history-date { color: #99aab5; font-size: 0.85em; }
-        .history-writer { color: #ffd700; font-size: 0.9em; font-weight: bold; } 
-        .writer-major { color: #ffd700; font-size: 0.85em; font-weight: normal; margin-left: 3px; }
-        .history-summary { color: white; font-weight: bold; font-size: 1.05em; margin-top: 8px; }
+        ul { list-style: none; padding: 0; margin: 0; overflow-y: auto; flex: 1; padding-right: 4px; }
+        li.history-item { 
+            background: var(--bg-input); margin-bottom: 9px; padding: 14px 16px; 
+            border-radius: 6px; border: 1px solid var(--border-color);
+            cursor: pointer; transition: 0.12s; 
+        }
+        li.history-item:hover { 
+            border-color: var(--border-hover);
+            background: var(--bg-elevated); 
+        }
+        .history-date { color: var(--text-muted); font-size: 0.82em; }
+        .history-writer { color: #cfd2d8; font-size: 0.88em; font-weight: bold; } 
+        .writer-major { color: var(--text-secondary); font-size: 0.88em; font-weight: normal; margin-left: 3px; }
+        .history-summary { color: var(--text-primary); font-weight: bold; font-size: 0.96em; margin-top: 6px; }
         
         #viewer-msg {
             display: none; flex: 1; justify-content: center; align-items: center; 
-            color: #72767d; font-size: 1.5em; border: 3px dashed #40444b; 
-            border-radius: 12px; margin-bottom: 20px; text-align: center; background: #2f3136;
+            color: var(--text-muted); font-size: 1.4em; border: 1px dashed var(--border-hover); 
+            border-radius: 6px; margin-bottom: 20px; text-align: center; background: var(--bg-input);
         }
-
-        ::-webkit-scrollbar { width: 8px; height: 6px; background: #2f3136; }
-        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -191,9 +335,9 @@
         <div class="view-box">
             <div class="view-header">
                 <div>
-                    <h2 style="color:white; margin:0;">📄 차팅 상세</h2>
-                    <div style="color:#b9bbbe; margin-top:5px; font-size:0.9em;">
-                        작성일: <span id="v-date" style="color:white;">-</span> | 작성자: <span id="v-writer" style="color:#ffd700;">-</span>
+                    <h2 style="color:var(--text-primary); margin:0; font-size: 1.2em; font-weight: bold;">📄 차팅 상세</h2>
+                    <div style="color:var(--text-secondary); margin-top:5px; font-size:0.88em;">
+                        작성일: <span id="v-date" style="color:var(--text-primary);">-</span> | 작성자: <span id="v-writer" style="color:#cfd2d8; font-weight:bold;">-</span>
                     </div>
                 </div>
             </div>
@@ -205,9 +349,9 @@
                 <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
             </div>
             
-            <div style="margin-top:20px; display:flex; justify-content: flex-end; gap: 10px;">
-                <button onclick="loadFromHistory()" style="padding:10px 20px; background:#3ba55c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">📥 불러오기</button>
-                <button onclick="closeView()" style="padding:10px 20px; background:#4f545c; border:none; border-radius:6px; color:white; font-weight:bold; cursor:pointer;">닫기</button>
+            <div style="margin-top:18px; padding-right:8px; display:flex; justify-content: flex-end; gap: 8px;">
+                <button onclick="loadFromHistory()" style="width:auto; margin:0; padding:10px 22px; background:var(--accent-primary); border-radius:5px; color:white; font-size:0.95em; font-weight:bold; cursor:pointer;">불러오기</button>
+                <button onclick="closeView()" style="width:auto; margin:0; padding:10px 20px; background:var(--bg-control); border:1px solid var(--border-color); border-radius:5px; color:white; font-size:0.95em; font-weight:bold; cursor:pointer;">닫기</button>
             </div>
         </div>
     </div>
@@ -215,15 +359,15 @@
     <div class="container">
         <div class="chart-section">
             <div class="patient-info">
-                <div style="display:flex; align-items:center;">
-                    <span class="p-tag">항목</span> 
-                    <span id="p-name" style="font-size: 1.3em; font-weight: bold;">-</span>
-                    <span style="color:#72767d; margin: 0 15px;">|</span>
-                    <span id="p-id" style="color:#b9bbbe; font-size: 1.1em;">-</span>
+                <div class="patient-info-left">
+                    <span class="p-tag">항목</span>
+                    <span id="p-name" class="header-title-text">-</span>
+                    <span class="header-divider"></span>
+                    <span id="p-id" class="chart-id-badge">-</span>
                 </div>
-                <div style="text-align: right;">
-                    <div id="p-incharge" style="color:#ffd700; font-size: 1.05em; font-weight: bold;">담당: -</div>
-                    <div id="p-dept" style="color:#5865f2; font-weight: bold; margin-top:5px;">-</div>
+                <div class="patient-info-right">
+                    <div id="p-incharge" style="color:#cfd2d8; font-size: 0.98em; font-weight: bold; line-height: 1.2;">담당: -</div>
+                    <div id="p-dept" style="color:var(--text-secondary); font-weight: bold; font-size: 0.88em; line-height: 1.2;">-</div>
                 </div>
             </div>
 
@@ -234,7 +378,7 @@
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyFormat('strikeThrough');"><s>S 취소선</s></button>
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyCode();"><code>&lt;&gt; 코드</code></button>
                 <button type="button" class="tool-btn" onmousedown="event.preventDefault(); applyQuote();">❝ 인용구</button>
-                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); removeAllFormat();" style="color:#ed4245;">✕ 제거</button>
+                <button type="button" class="tool-btn" onmousedown="event.preventDefault(); removeAllFormat();" style="color:#ff8a80;">✕ 제거</button>
             </div>
 
             <div class="input-scroll-area" id="input-area">
@@ -252,7 +396,7 @@
             </div>
 
             <div id="viewer-msg">
-                <div>🔒 <b>기록 열람 전용</b><br><span style="font-size:0.6em; font-weight:normal;">입력 및 수정 권한이 없습니다.</span></div>
+                <div>🔒 <b>기록 열람 전용</b><br><span style="font-size:0.65em; font-weight:normal;">입력 및 수정 권한이 없습니다.</span></div>
             </div>
 
             <div class="btn-group">
@@ -262,14 +406,33 @@
             </div>
         </div>
 
-        <div class="history-section">
-            <div style="display:flex; align-items:center; gap: 15px; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px; flex-shrink:0;">
-                <h3 style="margin:0; color:white; border:none; padding:0; font-size:1.3em;">📋 차팅 기록 (History)</h3>
-                <button onclick="requestRefresh()" style="width: auto; background:#4f545c; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em;">🔄 새로고침</button>
+        <div class="right-sidebar">
+            <!-- 상단: 차팅 기록 (History) -->
+            <div class="history-section">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; border-bottom:1px solid var(--border-color); padding-bottom:10px; flex-shrink:0;">
+                    <h3 style="margin:0; color:var(--text-primary); border:none; padding:0; font-size:1.1em; font-weight: bold;">📋 차팅 기록 (History)</h3>
+                    <button onclick="requestRefresh()" style="width: auto; margin: 0; background:var(--bg-control); color:var(--text-secondary); border:1px solid var(--border-color); padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em; font-weight:bold;">🔄 새로고침</button>
+                </div>
+                <ul id="history-list">
+                    <li style="color:var(--text-muted); text-align:center; padding:30px; border: 1px dashed var(--border-color); border-radius: 6px;">데이터 불러오는 중...</li>
+                </ul>
             </div>
-            <ul id="history-list">
-                <li style="color:#72767d; text-align:center; padding:40px; border: 2px dashed #40444b; border-radius: 8px;">데이터 불러오는 중...</li>
-            </ul>
+
+            <!-- 하단: 독립 포스트잇 (상시 메모) -->
+            <div class="postit-section">
+                <div class="postit-header">
+                    <div class="postit-title">
+                        <span>📌 포스트잇 (상시 메모)</span>
+                        <span id="postit-status" class="postit-status">자동 저장됨</span>
+                    </div>
+                    <button type="button" id="btn-clear-postit" class="btn-clear-postit" onclick="clearPostIt()" title="포스트잇 내용만 비우기">지우기</button>
+                </div>
+                <textarea 
+                    id="postit-input" 
+                    class="postit-textarea" 
+                    placeholder="항목 상시 메모 입력 (자동 저장 / 차팅 기록과 별도 관리)"
+                ></textarea>
+            </div>
         </div>
     </div>
 
@@ -280,12 +443,18 @@
         let myRole = 'doctor'; 
         let cachedHistoryData = [];
 
+        let postItTimer = null;
+        let isPostItDirty = false;
+
         window.onload = () => {
             window.electronAPI.send('request-patient-data');
             window.electronAPI.send('request-metadata');
         };
 
         function goBack() {
+            if (isPostItDirty) {
+                flushPostItSave();
+            }
             if (window.history.length > 1) {
                 window.history.back();
             } else {
@@ -294,7 +463,68 @@
         }
 
         // ============================================================
-        // ★ XSS 방어: 허용된 서식 태그 외의 모든 태그 및 인라인 이벤트/속성 제거
+        // ★ 포스트잇(상시 메모) 자동 저장 및 초기화 로직
+        // ============================================================
+        const postItEl = document.getElementById('postit-input');
+        const postItStatusEl = document.getElementById('postit-status');
+
+        function flushPostItSave() {
+            if (myRole === 'viewer') return;
+            if (!currentPatientInfo) return;
+
+            if (postItTimer) {
+                clearTimeout(postItTimer);
+                postItTimer = null;
+            }
+            isPostItDirty = false;
+
+            if (postItStatusEl) {
+                postItStatusEl.innerText = '저장 중...';
+                postItStatusEl.style.color = '#b4b7bd';
+            }
+
+            window.electronAPI.send('save-postit', {
+                patientId: currentPatientInfo.id,
+                postIt: postItEl ? postItEl.value : ''
+            });
+        }
+
+        function clearPostIt() {
+            if (myRole === 'viewer') return;
+            if (postItEl) {
+                postItEl.value = '';
+            }
+            flushPostItSave();
+        }
+
+        if (postItEl) {
+            postItEl.addEventListener('input', () => {
+                if (myRole === 'viewer') return;
+                isPostItDirty = true;
+                if (postItStatusEl) {
+                    postItStatusEl.innerText = '입력 중...';
+                    postItStatusEl.style.color = '#b4b7bd';
+                }
+                if (postItTimer) clearTimeout(postItTimer);
+                postItTimer = setTimeout(flushPostItSave, 800);
+            });
+
+            postItEl.addEventListener('blur', () => {
+                if (isPostItDirty) {
+                    flushPostItSave();
+                }
+            });
+        }
+
+        window.electronAPI.on('postit-saved', () => {
+            if (postItStatusEl) {
+                postItStatusEl.innerText = '저장됨 ✓';
+                postItStatusEl.style.color = '#4ade80';
+            }
+        });
+
+        // ============================================================
+        // ★ XSS 방어
         // ============================================================
         function sanitizeHTML(dirty) {
             if (!dirty) return '';
@@ -311,11 +541,9 @@
                 for (const child of children) {
                     if (child.nodeType === Node.ELEMENT_NODE) {
                         if (!allowedTags.has(child.tagName)) {
-                            // script, img, iframe 등 미허용 태그는 텍스트만 보존하고 태그는 소멸
                             const textNode = document.createTextNode(child.textContent);
                             child.replaceWith(textNode);
                         } else {
-                            // onerror, onclick, style 등 모든 위험 속성 일괄 박멸
                             while (child.attributes.length > 0) {
                                 child.removeAttribute(child.attributes[0].name);
                             }
@@ -333,7 +561,6 @@
             document.execCommand(command, false, value);
         }
 
-        // DOM 언랩 헬퍼 (인용구 태그만 깔끔하게 제거하고 내부 내용은 보존)
         function unwrapBlockquote(bq) {
             if (!bq || !bq.parentNode) return;
             const parent = bq.parentNode;
@@ -343,7 +570,6 @@
             parent.removeChild(bq);
         }
 
-        // 인용구 토글 적용/해제
         function applyQuote() {
             const selection = window.getSelection();
             if (!selection || selection.rangeCount === 0) return;
@@ -359,7 +585,6 @@
             }
         }
 
-        // 서식 전체 제거 (인라인 서식 + 인용구 + 코드 블록 동시 해제)
         function removeAllFormat() {
             document.execCommand('removeFormat', false, null);
 
@@ -420,7 +645,7 @@
 
         function formatViewerContent(html) {
             if (!html || html.trim() === '' || html === '-') {
-                return '<span style="color:#72767d;">내용 없음</span>';
+                return '<span style="color:var(--text-muted);">내용 없음</span>';
             }
             return html.replace(/(<pre[\s\S]*?<\/pre>)|(<code>([\s\S]*?)<\/code>)/gi, function(match, preBlock, codeBlock, codeContent) {
                 if (preBlock) return preBlock;
@@ -438,18 +663,24 @@
 
         window.electronAPI.on('init-user-role', (role) => {
             myRole = role;
+            const btnClearPostIt = document.getElementById('btn-clear-postit');
+
             if (role === 'viewer') {
                 document.getElementById('input-area').style.display = 'none';
                 document.querySelector('.format-toolbar').style.display = 'none';
                 document.getElementById('viewer-msg').style.display = 'flex';
                 document.getElementById('btn-save-action').style.display = 'none';
                 document.getElementById('btn-reset').style.display = 'none';
+                if (postItEl) postItEl.readOnly = true;
+                if (btnClearPostIt) btnClearPostIt.style.display = 'none';
             } else {
                 document.getElementById('input-area').style.display = 'block';
                 document.querySelector('.format-toolbar').style.display = 'flex';
                 document.getElementById('viewer-msg').style.display = 'none';
                 document.getElementById('btn-save-action').style.display = 'block';
                 document.getElementById('btn-reset').style.display = 'block';
+                if (postItEl) postItEl.readOnly = false;
+                if (btnClearPostIt) btnClearPostIt.style.display = 'inline-flex';
             }
         });
 
@@ -481,6 +712,15 @@
             if(!patient) return;
             currentPatientInfo = patient;
             renderHeader();
+
+            if (postItEl) {
+                postItEl.value = patient.postIt || '';
+            }
+            if (postItStatusEl) {
+                postItStatusEl.innerText = patient.postIt ? '불러옴' : '자동 저장됨';
+                postItStatusEl.style.color = '#7c8087';
+            }
+
             window.electronAPI.send('request-history', patient.id);
             hardResetInputs();
         });
@@ -515,11 +755,13 @@
             const list = document.getElementById('history-list');
             list.innerHTML = '';
             if (!historyData || historyData.length === 0) {
-                list.innerHTML = '<li style="color:#72767d; text-align:center; padding:40px; border: 2px dashed #40444b; border-radius: 8px;">기록이 없습니다.</li>';
+                list.innerHTML = '<li style="color:var(--text-muted); text-align:center; padding:30px; border: 1px dashed var(--border-color); border-radius: 6px;">기록이 없습니다.</li>';
                 return;
             }
 
+            const fragment = document.createDocumentFragment();
             const sortedData = [...historyData].reverse();
+
             sortedData.forEach(item => {
                 const li = document.createElement('li');
                 li.className = 'history-item';
@@ -540,8 +782,10 @@
                     <div class="history-summary">${showA ? '(Dx) ' + showA : '(Sx) ' + (showS || '내용 없음')}</div>
                 `;
                 li.onclick = () => openView(item);
-                list.appendChild(li);
+                fragment.appendChild(li);
             });
+
+            list.appendChild(fragment);
         }
 
         function openView(item) {
@@ -552,7 +796,6 @@
             document.getElementById('v-date').innerText = new Date(item.savedAt).toLocaleString();
             document.getElementById('v-writer').innerText = `${writerName} ${writerMajor}`;
             
-            // ★ 상세 모달에 출력할 때도 XSS 소독 후 렌더링
             document.getElementById('v-s').innerHTML = formatViewerContent(sanitizeHTML(data.s || data.S));
             document.getElementById('v-o').innerHTML = formatViewerContent(sanitizeHTML(data.o || data.O));
             document.getElementById('v-a').innerHTML = formatViewerContent(sanitizeHTML(data.a || data.A));
@@ -570,7 +813,6 @@
             if (!currentViewData) return;
 
             const data = currentViewData.soapData || {};
-            // 불러와서 입력창에 채울 때도 안전하게 소독 처리
             document.getElementById('s').innerHTML = sanitizeHTML(data.s || data.S || '');
             document.getElementById('o').innerHTML = sanitizeHTML(data.o || data.O || '');
             document.getElementById('a').innerHTML = sanitizeHTML(data.a || data.A || '');
@@ -578,8 +820,8 @@
             
             const btn = document.getElementById('btn-save-action');
             if(btn) {
-                btn.innerText = "✨ 새 기록으로 저장 (New Save)";
-                btn.style.backgroundColor = "#eb459e";
+                btn.innerText = "💾 새 기록으로 저장 (New Save)";
+                btn.style.backgroundColor = "#16357d";
             }
             
             closeView();
@@ -595,14 +837,13 @@
             const btn = document.getElementById('btn-save-action');
             if(btn) {
                 btn.innerText = "💾 저장하기 (Save)";
-                btn.style.backgroundColor = "#5865f2";
+                btn.style.backgroundColor = "#1d449e";
             }
         }
 
         function saveData() {
             if (myRole === 'viewer') return; 
             
-            // ★ 저장 전 입력값 소독 처리
             const s = sanitizeHTML(document.getElementById('s').innerHTML.trim());
             const o = sanitizeHTML(document.getElementById('o').innerHTML.trim());
             const a = sanitizeHTML(document.getElementById('a').innerHTML.trim());
@@ -637,11 +878,11 @@
             const btn = document.getElementById('btn-save-action');
             if(btn) {
                 btn.innerText = "✅ 저장 완료!";
-                btn.style.backgroundColor = "#3ba55c";
+                btn.style.backgroundColor = "#107c41";
                 
                 setTimeout(() => {
                     btn.innerText = "💾 저장하기 (Save)";
-                    btn.style.backgroundColor = "#5865f2";
+                    btn.style.backgroundColor = "#1d449e";
                 }, 1500);
             }
         });
@@ -651,6 +892,19 @@
         window.electronAPI.on('auto-sync-updated', () => {
             console.log("⚡ 실시간 감지: 현재 차트 기록을 자동으로 새로고침합니다.");
             requestRefresh();
+        });
+
+        window.electronAPI.on('postit-sync-updated', ({ patientId, postIt }) => {
+            if (!currentPatientInfo || String(currentPatientInfo.id) !== String(patientId)) return;
+            if (isPostItDirty) return;
+
+            if (postItEl && postItEl.value !== postIt) {
+                postItEl.value = postIt || '';
+                if (postItStatusEl) {
+                    postItStatusEl.innerText = '동기화됨 ✓';
+                    postItStatusEl.style.color = '#4ade80';
+                }
+            }
         });
     </script>
 </body>

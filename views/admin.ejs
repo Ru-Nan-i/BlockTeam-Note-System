@@ -7,92 +7,116 @@
     <style>
         body { 
             display: block !important; margin: 0; padding: 0; 
-            overflow: hidden; background-color: #36393f; 
+            overflow: hidden; background-color: var(--bg-base); 
         }
         .header {
-            width: 100%; height: 70px; background: #202225; 
-            border-bottom: 1px solid #18191c; 
+            width: 100%; height: 54px; background: var(--bg-base); 
+            border-bottom: 1px solid var(--border-color); 
             display: flex; justify-content: center; align-items: center; 
             box-sizing: border-box; flex-shrink: 0;
         }
         .admin-grid { 
             display: grid; grid-template-columns: 1fr 1fr; 
-            gap: 25px; padding: 25px; 
-            height: calc(100vh - 80px); 
+            gap: 20px; padding: 20px 22px; 
+            height: calc(100vh - 54px); 
             box-sizing: border-box; 
             width: 100%; max-width: 1600px; margin: 0 auto;
         }
-        .left-col { display: flex; flex-direction: column; height: 100%; gap: 15px; overflow-y: auto; padding-right: 5px; }
+        .left-col { display: flex; flex-direction: column; height: 100%; gap: 14px; overflow-y: auto; padding-right: 4px; }
         
         .form-section { 
-            background: var(--panel-color); padding: 20px; border-radius: 12px; 
-            border-left: 5px solid #5865f2; flex: 0 0 auto; 
-            display: flex; flex-direction: column; gap: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: var(--bg-panel); padding: 18px 20px; border-radius: 8px; 
+            border: 1px solid var(--border-color);
+            flex: 0 0 auto; 
+            display: flex; flex-direction: column; gap: 9px;
         }
-        .form-section:nth-child(1) { border-left-color: #5865f2; }
-        .form-section:nth-child(2) { border-left-color: #3ba55c; }
-        .form-section:nth-child(3) { border-left-color: #eb459e; }
-        .form-section:nth-child(4) { border-left-color: #ff9f43; }
         
         .history-section { 
-            background: var(--panel-color); padding: 25px; border-radius: 12px; 
+            background: var(--bg-panel); padding: 22px; border-radius: 8px; 
+            border: 1px solid var(--border-color);
             overflow-y: hidden; height: 100%; display: flex; flex-direction: column;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .search-box { background: #202225; border: 1px solid #40444b; padding: 12px; border-radius: 8px; color: white; width: 100%; margin-bottom: 15px; font-size: 1em; }
+        .search-box { 
+            background: var(--bg-input); border: 1px solid var(--border-color); 
+            padding: 10px 12px; border-radius: 5px; color: var(--text-primary); 
+            width: 100%; margin: 0 0 14px 0; font-size: 0.96em; 
+        }
         input, select { 
-            margin-bottom: 0; width: 100%; box-sizing: border-box; padding: 12px; 
-            background: #40444b; border: 1px solid #2f3136; color: white; border-radius: 6px; 
-            height: 45px; font-size: 0.95em; -webkit-app-region: no-drag !important;
+            margin: 0; width: 100%; box-sizing: border-box; padding: 10px 12px; 
+            background: var(--bg-input); border: 1px solid var(--border-color); 
+            color: var(--text-primary); border-radius: 5px; 
+            height: 42px; font-size: 0.94em; -webkit-app-region: no-drag !important;
+            outline: none; transition: border-color 0.14s, background-color 0.14s;
         }
-        input:focus, select:focus { outline: 2px solid #5865f2; }
-        h3 { color: #fff; margin: 0 0 10px 0; border-bottom: 1px solid #444; padding-bottom: 10px; font-size: 1.1em; }
-        label { color: #b9bbbe; font-size: 0.85em; margin-bottom: 4px; margin-top: 5px; display:block; font-weight: bold;}
+        input:focus, select:focus { 
+            background: #161719;
+            border-color: #545861; 
+        }
+        h3 { color: var(--text-primary); margin: 0 0 8px 0; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; font-size: 1.04em; font-weight: bold; }
+        label { color: var(--text-secondary); font-size: 0.85em; margin-bottom: 3px; margin-top: 4px; display:block; font-weight: bold;}
         
-        button { background: #5865f2; color: white; border: none; padding: 12px; width: 100%; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: auto; transition: 0.2s; }
-        button:hover { filter: brightness(1.1); transform: translateY(-1px); }
-        .logout-btn { background-color: #ed4245; margin-top: 15px; padding: 15px; font-size: 1.1em; }
+        button { background: var(--accent-primary); color: #ffffff; border: none; padding: 11px; width: 100%; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: auto; transition: 0.14s; }
+        button:hover { background: var(--accent-hover); }
         
-        .list-btn-group { float: right; display: flex; gap: 5px; }
-        .del-btn { background: #ed4245; width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
-        .pdf-btn { background: #ff9f43; width: auto; padding: 6px 12px; font-size: 0.85em; margin: 0; }
+        .logout-btn { 
+            background: var(--bg-control); color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            margin-top: 4px; padding: 12px; font-size: 0.98em; 
+        }
+        .logout-btn:hover {
+            background: var(--danger-color); color: #ffffff; border-color: var(--danger-hover);
+        }
         
-        .common-badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; font-weight: bold; color: white; vertical-align: middle; margin-right: 5px; line-height: 1.2; }
-        .badge-dept { background: #5865f2; } 
-        .badge-patient { background: #3ba55c; } 
-        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 9999; justify-content: center; align-items: center; }
-        .alert-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #5865f2; text-align: center; width: 350px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .view-box { background: #2f3136; padding: 30px; border-radius: 12px; border: 1px solid #3ba55c; width: 650px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .view-header { border-bottom: 1px solid #444; padding-bottom: 15px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .view-content { overflow-y: auto; flex: 1; padding-right: 10px; }
+        .list-btn-group { float: right; display: flex; gap: 6px; }
+        .del-btn { 
+            background: var(--bg-control); color: #ff8a80;
+            border: 1px solid var(--border-color);
+            width: auto; padding: 4px 10px; font-size: 0.82em; margin: 0; 
+        }
+        .del-btn:hover { background: var(--danger-color); color: #ffffff; border-color: var(--danger-hover); }
+
+        .pdf-btn { 
+            background: var(--bg-control); color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            width: auto; padding: 4px 10px; font-size: 0.82em; margin: 0; 
+        }
+        .pdf-btn:hover { background: var(--accent-primary); color: #ffffff; border-color: var(--accent-hover); }
         
-        .soap-row { margin-bottom: 15px; }
-        .soap-label { color: #b9bbbe; font-weight: bold; display: block; margin-bottom: 5px; font-size: 1.05em; }
+        .common-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.82em; font-weight: bold; vertical-align: middle; margin-right: 5px; line-height: 1.3; }
+        .badge-dept { background: var(--bg-control); color: #dcdde0; border: 1px solid var(--border-hover); } 
+        .badge-patient { background: var(--bg-elevated); color: var(--text-primary); } 
+
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.72); z-index: 9999; justify-content: center; align-items: center; }
+        .alert-box { background: var(--bg-panel); padding: 28px; border-radius: 8px; border: 1px solid var(--border-hover); text-align: center; width: 350px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); }
+        .view-box { background: var(--bg-panel); padding: 28px; border-radius: 8px; border: 1px solid var(--border-hover); width: 650px; max-height: 82vh; display: flex; flex-direction: column; box-shadow: 0 16px 40px rgba(0,0,0,0.6); }
+        .view-header { border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+        .view-content { overflow-y: auto; flex: 1; padding-right: 8px; }
         
-        /* 상세 모달 서식 스타일 */
+        .soap-row { margin-bottom: 14px; }
+        .soap-label { color: var(--text-secondary); font-weight: bold; display: block; margin-bottom: 5px; font-size: 0.96em; }
+        
         .soap-text { 
-            background: #202225; padding: 14px; border-radius: 6px; 
-            color: #ffffff !important; border: 1px solid #2f3136; font-size: 1em; line-height: 1.6;
+            background: var(--bg-input); padding: 12px 14px; border-radius: 5px; 
+            color: var(--text-primary) !important; border: 1px solid var(--border-color); font-size: 0.98em; line-height: 1.6;
             white-space: pre-wrap !important; word-break: break-word;
             -webkit-user-select: text !important;
         }
         .soap-text strong, .soap-text b { color: #ffffff; font-weight: bold; }
         .soap-text u { text-decoration: underline; }
         .soap-text em, .soap-text i { font-style: italic; color: #ffffff; }
-        .soap-text strike, .soap-text del { text-decoration: line-through; color: #b9bbbe; }
+        .soap-text strike, .soap-text del { text-decoration: line-through; color: var(--text-secondary); }
         
         .soap-text code {
-            background: #2b2d31 !important;
-            color: #dbdee1 !important;
+            background: #2f3136 !important;
+            color: #e6e7ea !important;
             padding: 2px 6px !important;
             border-radius: 4px !important;
             font-family: Consolas, 'Courier New', monospace !important;
             font-size: 0.88em !important;
         }
         .soap-text pre {
-            background: #1e1f22 !important;
-            border: 1px solid #111214 !important;
+            background: #141517 !important;
+            border: 1px solid var(--border-color) !important;
             border-radius: 5px !important;
             padding: 10px 14px !important;
             margin: 8px 0 !important;
@@ -105,7 +129,7 @@
             background: transparent !important;
             border: none !important;
             padding: 0 !important;
-            color: #dbdee1 !important;
+            color: #e6e7ea !important;
             font-family: Consolas, 'Courier New', monospace !important;
             font-size: 0.9em !important;
             line-height: 1.5 !important;
@@ -113,18 +137,15 @@
             display: block !important;
         }
         .soap-text blockquote {
-            border-left: 4px solid #4e5058; margin: 6px 0; padding: 4px 10px;
-            background: rgba(78, 80, 88, 0.15); color: #b9bbbe; border-radius: 0 4px 4px 0;
+            border-left: 4px solid #545861; margin: 6px 0; padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.04); color: #cfd2d8; border-radius: 0 4px 4px 0;
         }
 
-        .writer-name { color: #ffd700; font-weight: bold; }
-        .writer-major { color: #ffd700; font-size: 0.9em; }
-        .modal-msg { color: white; font-size: 1.1em; margin-bottom: 20px; line-height: 1.5; }
+        .writer-name { color: #cfd2d8; font-weight: bold; }
+        .writer-major { color: var(--text-secondary); font-size: 0.9em; font-weight: normal; }
+        .modal-msg { color: var(--text-primary); font-size: 1.05em; margin-bottom: 20px; line-height: 1.5; }
         .modal-btn-group { display: flex; justify-content: center; gap: 10px; }
-        .modal-btn { width: auto; padding: 10px 25px; }
-        ::-webkit-scrollbar { width: 8px; height: 6px; }
-        ::-webkit-scrollbar-thumb { background: #202225; border-radius: 4px; }
-        ::-webkit-scrollbar-track { background: #2f3136; }
+        .modal-btn { width: auto; padding: 9px 22px; margin: 0; }
     </style>
 </head>
 <body>
@@ -133,8 +154,8 @@
             <div id="alert-text" class="modal-msg">알림 내용</div>
             <div class="modal-btn-group">
                 <button id="btn-ok" class="modal-btn" onclick="closeAlert()">확인</button>
-                <button id="btn-yes" class="modal-btn" style="background:#ed4245; display:none;">삭제</button>
-                <button id="btn-no" class="modal-btn" style="background:#4f545c; display:none;" onclick="closeAlert()">취소</button>
+                <button id="btn-yes" class="modal-btn" style="background:var(--danger-color); display:none;">삭제</button>
+                <button id="btn-no" class="modal-btn" style="background:var(--bg-control); border:1px solid var(--border-color); display:none;" onclick="closeAlert()">취소</button>
             </div>
         </div>
     </div>
@@ -143,14 +164,14 @@
         <div class="view-box">
             <div class="view-header">
                 <div>
-                    <h2 style="color:white; margin:0;">📄 차팅 상세</h2>
-                    <div style="color:#b9bbbe; margin-top:5px; font-size:0.9em;">
-                        항목: <span id="v-patient" style="color:white; font-weight:bold;">-</span> |
-                        콘텐츠: <span id="v-dept" style="color:#5865f2; font-weight:bold;">-</span>
+                    <h2 style="color:var(--text-primary); margin:0; font-size: 1.2em; font-weight: bold;">📄 차팅 상세</h2>
+                    <div style="color:var(--text-secondary); margin-top:5px; font-size:0.88em;">
+                        항목: <span id="v-patient" style="color:var(--text-primary); font-weight:bold;">-</span> |
+                        콘텐츠: <span id="v-dept" style="color:#cfd2d8; font-weight:bold;">-</span>
                     </div>
                 </div>
                 <div style="text-align:right;">
-                    <div style="color:#72767d; font-size:0.9em;" id="v-date">-</div>
+                    <div style="color:var(--text-muted); font-size:0.85em;" id="v-date">-</div>
                     <div style="margin-top:5px;">작성: <span id="v-writer" class="writer-name">-</span></div>
                 </div>
             </div>
@@ -161,16 +182,16 @@
                 <div class="soap-row"><span class="soap-label">Assessment (진단 및 평가)</span><div id="v-a" class="soap-text"></div></div>
                 <div class="soap-row"><span class="soap-label">Plan (계획)</span><div id="v-p" class="soap-text"></div></div>
             </div>
-            <div style="margin-top:20px; text-align:right;">
-                <button onclick="closeView()" style="width:auto; padding:10px 30px; background:#4f545c;">닫기</button>
+            <div style="margin-top:18px; text-align:right;">
+                <button onclick="closeView()" style="width:auto; margin:0; padding:10px 26px; background:var(--bg-control); border:1px solid var(--border-color);">닫기</button>
             </div>
         </div>
     </div>
 
     <div id="main-app-container">
         <div class="header">
-            <h2 style="margin:0; color:#fff; text-align: center; line-height: 1.3;">
-                🛡️ NOTE DATA 관리자 시스템
+            <h2 style="margin:0; color:var(--text-primary); text-align: center; font-size: 1.12em; font-weight: bold;">
+                NOTE DATA 관리자 시스템
             </h2>
         </div>
 
@@ -187,21 +208,21 @@
                     <h3>2. 항목 등록</h3>
                     <label>항목 이름</label> <input id="p-name" placeholder="예: 홍길동">
                     <label>차트 번호 (자동)</label> 
-                    <div style="display:flex; gap:5px; margin-bottom: 5px;">
-                        <input id="p-id" placeholder="생성 중..." style="background:#2f3136; color:#00ffcc; font-weight:bold;">
-                        <button onclick="generateChartId()" style="width:40px; padding:0; background:#4f545c; font-size:1.2em;" title="새 번호 생성">🎲</button>
+                    <div style="display:flex; gap:6px; margin-bottom: 4px;">
+                        <input id="p-id" placeholder="생성 중..." style="background:var(--bg-input); color:#dcdde0; font-weight:bold; font-family:monospace;">
+                        <button onclick="generateChartId()" style="width:42px; margin:0; padding:0; background:var(--bg-control); border:1px solid var(--border-color); font-size:1.1em;" title="새 번호 생성">🎲</button>
                     </div>
                     <label>담당</label>
                     <select id="p-incharge"><option value="">-- 담당진 로딩중 --</option></select>
                     <label>소속 콘텐츠</label> 
                     <select id="p-dept"><option value="">-- 콘텐츠 로딩중 --</option></select>
-                    <button onclick="addPatient()" style="background: #3ba55c;">항목 등록</button>
+                    <button onclick="addPatient()">항목 등록</button>
                 </div>
                 
                 <div class="form-section">
                     <h3>3. 개발진 계정</h3>
                     <label>아이디 & 비밀번호</label>
-                    <div style="display:flex; gap:10px; margin-bottom: 5px;">
+                    <div style="display:flex; gap:10px; margin-bottom: 4px;">
                         <input id="u-id" placeholder="ID" style="flex:1;"> <input id="u-pw" type="password" placeholder="PW" style="flex:1;">
                     </div>
                     <label>이름 & 분야</label>
@@ -214,7 +235,7 @@
                         <option value="admin">관리자 (Admin)</option> 
                         <option value="viewer">열람 전용 (Viewer)</option>
                     </select>
-                    <button onclick="addUser()" style="background: #eb459e;">계정 생성</button>
+                    <button onclick="addUser()" style="background: #005a9e;">계정 생성</button>
                 </div>
                 
                 <div class="form-section">
@@ -223,20 +244,20 @@
                     <select id="update-p-id"><option value="">-- 항목 선택 --</option></select>
                     <label>새로운 담당</label>
                     <select id="update-doc-id"><option value="">-- 개발진 선택 --</option></select>
-                    <button onclick="updatePatientDoctor()" style="background: #ff9f43;">담당 변경</button>
+                    <button onclick="updatePatientDoctor()" style="background: #005a9e;">담당 변경</button>
                 </div>
-                <button class="logout-btn" onclick="window.location.href='login.ejs'">🚪 로그아웃</button>
+                <button class="logout-btn" onclick="window.location.href='login.ejs'">로그아웃</button>
             </div>
 
             <div class="history-section">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                     <h3 style="margin:0; border:none; padding:0;">📋 차팅 기록 관리</h3>
-                    <button onclick="loadAllCharts()" style="width:auto; background:#4f545c; font-size:0.9em; padding: 4px 10px; margin:0;">🔄 새로고침</button>
+                    <button onclick="loadAllCharts()" style="width:auto; background:var(--bg-control); color:var(--text-secondary); border:1px solid var(--border-color); font-size:0.84em; padding: 4px 10px; margin:0; font-weight:bold;">🔄 새로고침</button>
                 </div>
                 <input type="text" id="search-input" class="search-box" placeholder="🔍 검색..." onkeyup="filterCharts()">
-                <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
-                    <ul id="chart-list" style="list-style: none; padding: 0;">
-                        <li style="color:#72767d; text-align:center; padding:20px;">데이터 로딩중...</li>
+                <div style="flex: 1; overflow-y: auto; padding-right: 4px;">
+                    <ul id="chart-list" style="list-style: none; padding: 0; margin: 0;">
+                        <li style="color:var(--text-muted); text-align:center; padding:20px;">데이터 로딩중...</li>
                     </ul>
                 </div>
             </div>
@@ -305,7 +326,7 @@
 
         function formatViewerContent(html) {
             if (!html || html.trim() === '' || html === '-') {
-                return '<span style="color:#72767d;">내용 없음</span>';
+                return '<span style="color:var(--text-muted);">내용 없음</span>';
             }
             return html.replace(/(<pre[\s\S]*?<\/pre>)|(<code>([\s\S]*?)<\/code>)/gi, function(match, preBlock, codeBlock, codeContent) {
                 if (preBlock) return preBlock;
@@ -552,7 +573,7 @@
             const docOptions = '<option value="">-- 개발진 선택 --</option>';
             docSelect.innerHTML = docOptions;
             updateDocSelect.innerHTML = '<option value="">-- 변경할 개발진 선택 --</option>';
-            updateDocSelect.innerHTML += `<option value="unassigned" style="color:#ed4245; font-weight:bold;">⛔ 배정 해제 (None)</option>`;
+            updateDocSelect.innerHTML += `<option value="unassigned" style="color:#ff8a80; font-weight:bold;">⛔ 배정 해제 (None)</option>`;
 
             if (data.users) {
                 data.users.forEach(u => {
@@ -588,14 +609,16 @@
             const ul = document.getElementById('chart-list');
             ul.innerHTML = '';
             if(!list || list.length === 0) {
-                ul.innerHTML = '<li style="color:#72767d; text-align:center; padding:20px;">데이터 없음</li>';
+                ul.innerHTML = '<li style="color:var(--text-muted); text-align:center; padding:20px;">데이터 없음</li>';
                 return;
             }
+            const fragment = document.createDocumentFragment();
+
             list.forEach(c => {
                 const li = document.createElement('li');
-                li.style.cssText = 'background:#2f3136; margin-bottom:10px; border-radius:8px; padding:15px; border:1px solid #202225; cursor:pointer; transition:0.2s;';
-                li.onmouseover = function() { this.style.borderColor = '#5865f2'; };
-                li.onmouseout = function() { this.style.borderColor = '#202225'; };
+                li.style.cssText = 'background:#1b1c1e; margin-bottom:9px; border-radius:6px; padding:14px 16px; border:1px solid #323439; cursor:pointer; transition:0.12s;';
+                li.onmouseover = function() { this.style.borderColor = '#45484f'; this.style.background = '#2b2d31'; };
+                li.onmouseout = function() { this.style.borderColor = '#323439'; this.style.background = '#1b1c1e'; };
                 
                 li.onclick = function() { openView(c); };
 
@@ -610,7 +633,7 @@
                 const showSummary = cleanSummary(sData.a || sData.s || '내용 없음');
 
                 li.innerHTML = `
-                    <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; flex-direction:column; gap:7px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
                             <div>
                                 <span class="common-badge badge-dept">${realDept}</span>
@@ -622,19 +645,21 @@
                             </div>
                         </div>
 
-                        <div style="font-size:0.85em; color:#99aab5;">
+                        <div style="font-size:0.82em; color:var(--text-muted);">
                             <span>${dateStr}</span>
-                            <span style="color:#4f545c; margin: 0 5px;">|</span>
+                            <span style="margin: 0 5px; opacity: 0.4;">|</span>
                             <span class="writer-name">${writerName}<span class="writer-major">${writerMajor}</span></span>
                         </div>
 
-                        <div style="color:#fff; font-weight:bold; font-size:1em; line-height: 1.4; white-space: normal; word-break: break-all;">
+                        <div style="color:var(--text-primary); font-weight:bold; font-size:0.96em; line-height: 1.4; white-space: normal; word-break: break-all;">
                             ${showSummary}
                         </div>
                     </div>
                 `;
-                ul.appendChild(li);
+                fragment.appendChild(li);
             });
+
+            ul.appendChild(fragment);
         }
 
         window.electronAPI.on('auto-sync-updated', () => {
