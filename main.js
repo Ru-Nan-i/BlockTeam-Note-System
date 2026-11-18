@@ -9,6 +9,7 @@ let sessionToken = null; // 로그인 성공 시 GAS로부터 발급받는 동�
 let currentDoctorId = null;
 let currentPatient = null;
 let currentUserRole = 'doctor';
+let pendingChartSaves = 0; // 클라우드 저장 진행 중 동기화 덮어쓰기 방지 카운터
 
 // ====================================================================
 // ★ 1. Google Apps Script(GAS) 웹앱 URL
@@ -23,6 +24,8 @@ let localCache = {
     users: [],
     patients: [],
     charts: [],
+    chartsVersion: null,
+    patientsVersion: null,
     isLoaded: false
 };
 
@@ -47,10 +50,12 @@ async function requestGAS(action, payload = {}) {
 
         const text = await response.text();
 
-        console.log(`📡 GAS 응답 [${action}] | 상태: ${response.status} | 길이: ${text.length}`);
+        if (action !== 'ping') {
+            console.log(`[GAS] Response [${action}] | Status: ${response.status} | Length: ${text.length}`);
+        }
 
         if (!text || !text.trim()) {
-            console.error(`❌ GAS가 빈 응답을 반환했습니다. [${action}]`);
+            console.error(`[GAS] Empty response returned [${action}]`);
             return {
                 success: false,
                 message: `GAS 빈 응답 (HTTP ${response.status})`
@@ -61,14 +66,16 @@ async function requestGAS(action, payload = {}) {
             const result = JSON.parse(text);
 
             if (!response.ok || result.success === false) {
-                console.error(`❌ GAS 작업 실패 [${action}]:`, result.message);
+                console.error(`[GAS] Action failed [${action}]:`, result.message);
             }
 
             // 세션 만료 시 로그인 화면으로 전환
             if (result && result.code === 'UNAUTHORIZED' && action !== 'login') {
-                console.warn("⚠️ 세션이 만료되어 로그인 화면으로 이동합니다.");
+                console.warn('[Auth] Session expired. Redirecting to login screen.');
                 sessionToken = null;
                 localCache.isLoaded = false;
+                localCache.chartsVersion = null;
+                localCache.patientsVersion = null;
                 if (autoSyncTimer) clearInterval(autoSyncTimer);
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
@@ -78,7 +85,7 @@ async function requestGAS(action, payload = {}) {
             return result;
 
         } catch (jsonError) {
-            console.error(`❌ GAS 응답 JSON 파싱 실패 [${action}] / 원본: ${text}`);
+            console.error(`[GAS] JSON parse failed [${action}] / Raw: ${text}`);
             return {
                 success: false,
                 message: `GAS가 JSON이 아닌 응답을 반환했습니다. HTTP ${response.status}`,
@@ -87,7 +94,9 @@ async function requestGAS(action, payload = {}) {
         }
 
     } catch (error) {
-        console.error(`❌ GAS 통신 에러 (${action}):`, error);
+        if (action !== 'ping') {
+            console.error(`[GAS] Network error (${action}):`, error);
+        }
         return {
             success: false,
             message: error.message || '서버 통신 실패'
@@ -99,7 +108,7 @@ async function requestGAS(action, payload = {}) {
 // ★ 4. F5 새로고침용 전체 데이터 캐시 갱신
 // ====================================================================
 async function loadEverythingToCache() {
-    console.log("📥 GAS를 통해 드라이브에서 전체 데이터를 불러옵니다...");
+    console.log('[Cache] Fetching full data from Drive via GAS...');
 
     const result = await requestGAS('loadAll');
 
@@ -108,63 +117,92 @@ async function loadEverythingToCache() {
         localCache.users = result.data.users || [];
         localCache.patients = result.data.patients || [];
         localCache.charts = result.data.charts || [];
+        localCache.chartsVersion = result.chartsVersion || null;
+        localCache.patientsVersion = result.patientsVersion || null;
         localCache.isLoaded = true;
 
-        console.log("⚡ 캐싱 완료! 모든 조회가 즉시 처리됩니다.");
-        console.log(`   부서: ${localCache.departments.length}개 | 유저: ${localCache.users.length}명 | 항목: ${localCache.patients.length}개 | 차트: ${localCache.charts.length}개`);
+        console.log('[Cache] Caching complete. All queries ready.');
+        console.log(`[Cache] Depts: ${localCache.departments.length} | Users: ${localCache.users.length} | Items: ${localCache.patients.length} | Charts: ${localCache.charts.length}`);
 
         if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('cache-loaded');
         }
 
     } else {
-        console.error("데이터 로드 실패:", result ? result.message : '응답 없음');
+        console.error('[Cache] Data load failed:', result ? result.message : 'No response');
     }
 }
 
 // ====================================================================
-// ★ 5. 백그라운드 자동 동기화 (10초 주기)
+// ★ 5. 스마트 차등 동기화 (차트 + 포스트잇 버전 동시 체크 + 창 포커스 연동)
 // ====================================================================
 let autoSyncTimer = null;
+let isSyncingNow = false;
 
-function startAutoSync() {
-    if (autoSyncTimer) clearInterval(autoSyncTimer);
+async function syncChartsNow() {
+    if (!sessionToken || !localCache.isLoaded || isSyncingNow || pendingChartSaves > 0) return;
+    isSyncingNow = true;
 
-    autoSyncTimer = setInterval(async () => {
-        if (!sessionToken || !localCache.isLoaded) return;
+    try {
+        const result = await requestGAS('syncCharts', {
+            lastVersion: localCache.chartsVersion,
+            lastPatientsVersion: localCache.patientsVersion
+        });
 
-        try {
-            const result = await requestGAS('syncCharts');
+        if (result && result.success) {
+            if (result.upToDate) {
+                return;
+            }
 
-            if (result.success && result.data) {
-                const latestCharts = result.data;
-                const chartMap = new Map();
-
-                localCache.charts.forEach(c => {
-                    if (c && c.id) chartMap.set(String(c.id), c);
-                });
-
-                latestCharts.forEach(c => {
-                    if (c && c.id) chartMap.set(String(c.id), c);
-                });
-
-                const mergedCharts = Array.from(chartMap.values());
-
-                if (mergedCharts.length !== localCache.charts.length) {
-                    console.log("🔔 [실시간 감지] 새로운 차팅 데이터가 동기화되었습니다!");
-                    localCache.charts = mergedCharts;
+            if (pendingChartSaves === 0) {
+                // 1) 차팅 기록 변경 반영
+                if (result.data) {
+                    console.log('[Sync] Chart data changes detected and synced.');
+                    localCache.charts = result.data;
+                    localCache.chartsVersion = result.version || null;
 
                     if (mainWindow && !mainWindow.isDestroyed()) {
                         mainWindow.webContents.send('auto-sync-updated');
                     }
                 }
+
+                // 2) 환자/포스트잇 변경 반영
+                if (result.patientsData) {
+                    console.log('[Sync] Post-it and item metadata synced.');
+                    localCache.patients = result.patientsData;
+                    localCache.patientsVersion = result.patientsVersion || null;
+
+                    if (currentPatient) {
+                        const updated = localCache.patients.find(p => String(p.id) === String(currentPatient.id));
+                        if (updated) {
+                            currentPatient = updated;
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.webContents.send('postit-sync-updated', {
+                                    patientId: currentPatient.id,
+                                    postIt: currentPatient.postIt || ''
+                                });
+                            }
+                        }
+                    }
+                }
             }
-
-        } catch (err) {
-            console.log("백그라운드 동기화 대기 중...");
         }
+    } catch (err) {
+        // 일시적 통신 대기 무시
+    } finally {
+        isSyncingNow = false;
+    }
+}
 
-    }, 10000);
+function startAutoSync() {
+    if (autoSyncTimer) clearInterval(autoSyncTimer);
+
+    autoSyncTimer = setInterval(() => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        // 창이 최소화되어 있거나 숨겨진 상태에서는 백그라운드 호출 일시 중지
+        if (mainWindow.isMinimized() || !mainWindow.isVisible()) return;
+        syncChartsNow();
+    }, 15000);
 }
 
 // ====================================================================
@@ -191,12 +229,13 @@ autoUpdater.on('update-downloaded', (info) => {
 });
 
 // ====================================================================
-// ★ 7. 일렉트론 윈도우 생성
+// ★ 7. 일렉트론 윈도우 생성 (깜빡임 제거 + 서버 예열 + 포커스 동기화)
 // ====================================================================
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1440,
         height: 1080,
+        show: false, // 초기 렌더링 완료 후 표시하여 회색 화면 깜빡임 제거
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
@@ -204,21 +243,34 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.js')
         },
         title: "BlockTeam HIS",
-        backgroundColor: '#2f3136',
+        backgroundColor: '#191a1c',
         icon: path.join(__dirname, 'assets', 'icon.png')
+    });
+
+    mainWindow.once('ready-to-show', () => {
+        mainWindow.show();
     });
 
     mainWindow.loadURL('file://' + __dirname + '/views/login.ejs');
 
     mainWindow.webContents.once('did-finish-load', () => {
         mainWindow.webContents.send('cache-loaded');
+        // 사용자가 아이디/비밀번호를 입력하는 동안 GAS 서버 컨테이너 미리 예열
+        requestGAS('ping').catch(() => {});
+    });
+
+    // 다른 창을 보다가 앱을 다시 클릭했을 때 즉시 차등 동기화 실행
+    mainWindow.on('focus', () => {
+        if (sessionToken && localCache.isLoaded) {
+            syncChartsNow();
+        }
     });
 
     mainWindow.webContents.on('before-input-event', async (event, input) => {
         if (input.key === 'F5' && input.type === 'keyDown') {
             event.preventDefault();
             if (sessionToken) {
-                console.log("🔄 F5 새로고침 요청: 드라이브 강제 동기화 시작!");
+                console.log('[Sync] F5 refresh requested: starting forced Drive sync...');
                 await loadEverythingToCache();
             }
             mainWindow.reload();
@@ -227,11 +279,18 @@ function createWindow() {
 }
 
 // ====================================================================
-// ★ 8. 앱 시작
+// ★ 8. 앱 시작 및 종료
 // ====================================================================
 app.whenReady().then(() => {
     createWindow();
     autoUpdater.checkForUpdatesAndNotify();
+});
+
+app.on('window-all-closed', () => {
+    if (autoSyncTimer) clearInterval(autoSyncTimer);
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
 });
 
 // ====================================================================
@@ -256,7 +315,7 @@ ipcMain.on('request-login', async (event, creds) => {
         return event.reply('login-failed', '아이디와 비밀번호를 입력해주세요.');
     }
 
-    console.log(`🔐 [초고속 통합 로그인 시도] ID: ${creds.id}`);
+    console.log(`[Auth] Login attempt | ID: ${creds.id}`);
     const result = await requestGAS('login', {
         id: creds.id,
         password: creds.password
@@ -267,26 +326,25 @@ ipcMain.on('request-login', async (event, creds) => {
         currentDoctorId = result.user.id;
         currentUserRole = result.user.role || 'doctor';
 
-        // 로그인 응답에 함께 온 데이터로 즉시 캐시 적재 (추가 loadAll 호출 제거)
         if (result.data) {
             localCache.departments = result.data.departments || [];
             localCache.users = result.data.users || [];
             localCache.patients = result.data.patients || [];
             localCache.charts = result.data.charts || [];
+            localCache.chartsVersion = result.chartsVersion || null;
+            localCache.patientsVersion = result.patientsVersion || null;
             localCache.isLoaded = true;
-            console.log(`⚡ 1회 통신 완료: 부서 ${localCache.departments.length}개, 항목 ${localCache.patients.length}개, 차트 ${localCache.charts.length}개 캐싱됨`);
+            console.log(`[Sync] Initial fetch complete: ${localCache.departments.length} depts, ${localCache.patients.length} items, ${localCache.charts.length} charts cached`);
         } else {
             await loadEverythingToCache();
         }
 
-        // 백그라운드 실시간 동기화 개시
         startAutoSync();
 
-        // 화면 전환
         const targetPage = currentUserRole === 'admin' ? 'admin.ejs' : 'selection.ejs';
         mainWindow.loadURL('file://' + __dirname + '/views/' + targetPage);
     } else {
-        console.warn(`❌ 로그인 실패: ${result ? result.message : '서버 무응답'}`);
+        console.warn(`[Auth] Login failed: ${result ? result.message : 'No response from server'}`);
         event.reply('login-failed', result && result.message ? result.message : '계정 정보가 일치하지 않습니다.');
     }
 });
@@ -300,9 +358,10 @@ ipcMain.on('request-metadata', (event) => {
     });
 });
 
-// 환자 선택
+// 환자 선택 (캐시 내 최신 포스트잇 포함 데이터 반영)
 ipcMain.on('patient-selected', (event, patient) => {
-    currentPatient = patient;
+    const latest = localCache.patients.find(p => String(p.id) === String(patient.id));
+    currentPatient = latest || patient;
     mainWindow.loadURL('file://' + __dirname + '/views/index.ejs');
 
     mainWindow.webContents.once('did-finish-load', () => {
@@ -314,6 +373,8 @@ ipcMain.on('patient-selected', (event, patient) => {
 // 데이터 리로드
 ipcMain.on('request-patient-data', (event) => {
     if (currentPatient) {
+        const latest = localCache.patients.find(p => String(p.id) === String(currentPatient.id));
+        if (latest) currentPatient = latest;
         event.reply('init-patient-data', currentPatient);
         event.reply('init-user-role', currentUserRole);
     }
@@ -362,10 +423,48 @@ ipcMain.on('save-soap-signed', async (event, payload) => {
     const safeName = currentPatient.name.replace(/[\\/:*?"<>|]/g, "");
     const fileName = `${safeName}(${currentPatient.id})_${timestamp}.json`;
 
+    pendingChartSaves++;
     requestGAS('saveChart', {
         fileName,
         deptName,
         chartData: requestData
+    }).then((res) => {
+        if (res && res.success && res.version) {
+            localCache.chartsVersion = res.version;
+        }
+    }).finally(() => {
+        pendingChartSaves = Math.max(0, pendingChartSaves - 1);
+    });
+});
+
+// 포스트잇(상시 메모) 자동 저장
+ipcMain.on('save-postit', (event, { patientId, postIt }) => {
+    if (currentUserRole === 'viewer') return;
+
+    const pid = patientId || (currentPatient ? currentPatient.id : null);
+    if (!pid) return;
+
+    const pIndex = localCache.patients.findIndex(p => String(p.id) === String(pid));
+    if (pIndex > -1) {
+        localCache.patients[pIndex].postIt = postIt;
+    }
+
+    if (currentPatient && String(currentPatient.id) === String(pid)) {
+        currentPatient.postIt = postIt;
+    }
+
+    event.reply('postit-saved');
+
+    pendingChartSaves++;
+    requestGAS('updatePostIt', {
+        patientId: pid,
+        postIt: postIt
+    }).then((res) => {
+        if (res && res.success && res.patientsVersion) {
+            localCache.patientsVersion = res.patientsVersion;
+        }
+    }).finally(() => {
+        pendingChartSaves = Math.max(0, pendingChartSaves - 1);
     });
 });
 
@@ -401,7 +500,14 @@ ipcMain.on('admin-get-charts', (e) => {
 ipcMain.on('admin-delete-chart', async (e, id) => {
     localCache.charts = localCache.charts.filter(c => c.id !== id);
     e.reply('action-result', '삭제 완료 (클라우드 동기화 중...)');
-    requestGAS('deleteChart', { chartId: id });
+    pendingChartSaves++;
+    requestGAS('deleteChart', { chartId: id }).then((res) => {
+        if (res && res.success && res.version) {
+            localCache.chartsVersion = res.version;
+        }
+    }).finally(() => {
+        pendingChartSaves = Math.max(0, pendingChartSaves - 1);
+    });
 });
 
 // 관리자: 담당 변경
@@ -457,11 +563,11 @@ ipcMain.on('generate-real-pdf', async (event, { html, filename }) => {
             fs.writeFileSync(filePath, pdfBuffer);
             printWindow.close();
         } catch (pdfErr) {
-            console.error('PDF 변환 오류:', pdfErr);
+            console.error('[PDF] Conversion error:', pdfErr);
             printWindow.close();
         }
 
     } catch (err) {
-        console.error('PDF 저장 대화상자 오류:', err);
+        console.error('[PDF] Save dialog error:', err);
     }
 });
