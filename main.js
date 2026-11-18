@@ -14,7 +14,7 @@ let pendingChartSaves = 0; // 클라우드 저장 진행 중 동기화 덮어쓰
 // ====================================================================
 // ★ 1. Google Apps Script(GAS) 웹앱 URL
 // ====================================================================
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyCQD7InLa0hzUiJ50k9KixUH03M9zs_pc9ZObisRUBOez82hcZ696rjtXKm8NkJH7Olg/exec';
+const GAS_URL = '';
 
 // ====================================================================
 // ★ 2. 메모리 캐시 저장소
